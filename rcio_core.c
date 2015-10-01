@@ -41,14 +41,14 @@ static struct attribute_group attr_group = {
 
 struct kobject *rcio_kobj;
 
-static int rcio_init(void)
+static bool rcio_init(void)
 {
     int retval;
 
     rcio_kobj = kobject_create_and_add("rcio", kernel_kobj);
 
     if (rcio_kobj == NULL) {
-        return -ENOMEM;
+        return false;
     }
 
     retval = sysfs_create_group(rcio_kobj, &attr_group);
@@ -57,11 +57,11 @@ static int rcio_init(void)
         goto errout_allocated;
     }
 
-    return retval;
+    return true;
 
 errout_allocated:
     kobject_put(rcio_kobj);
-    return retval;
+    return false;
 }
 
 static void rcio_exit(void)
@@ -70,16 +70,28 @@ static void rcio_exit(void)
 }
 
 
-int rcio_probe(struct rcio_state *state)
+int rcio_probe(struct rcio_adapter *state)
 {
     int ret;
+    const char buffer[] = {0x02, 0x07, 0x01};
 
-    ret = rcio_init();
+    if (!rcio_init()) {
+        goto errout_init;
+    }
 
-    return ret;
+    ret = state->write(state, buffer, sizeof(buffer));
+
+    if (ret < 0) {
+        return ret;
+    }
+
+    return 0;
+
+errout_init:
+    return -EBUSY;
 }
 
-int rcio_remove(struct rcio_state *state)
+int rcio_remove(struct rcio_adapter *state)
 {
     int ret;
 
