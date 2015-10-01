@@ -6,6 +6,7 @@
 
 #include "rcio.h"
 #include "rcio_adc.h"
+#include "rcio_pwm.h"
 
 static int connected;
 
@@ -102,8 +103,13 @@ static bool rcio_init(struct rcio_adapter *adapter)
         goto errout_adc;
     }
 
+    if (rcio_pwm_probe(&rcio_state) < 0) {
+        goto errout_pwm;
+    }
+
     return true;
 
+errout_pwm:
 errout_adc:
 errout_allocated:
     kobject_put(rcio_state.object);
