@@ -4,14 +4,14 @@
 
 #include "rcio.h"
 
-static int rcio_spi_write(struct rcio_adapter *state, const char *buffer, size_t length)
+static int rcio_spi_write(struct rcio_adapter *state, u16 address, const char *buffer, size_t length)
 {
     struct spi_device *spi = state->client;
 
     return spi_write(spi, buffer, length);
 }
 
-static int rcio_spi_read(struct rcio_adapter *state, char *buffer, size_t length)
+static int rcio_spi_read(struct rcio_adapter *state, u16 address, char *buffer, size_t length)
 {
     struct spi_device *spi = state->client;
 
