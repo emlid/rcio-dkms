@@ -5,6 +5,7 @@
 
 struct rcio_state
 {
+    struct kobject *object;
     struct rcio_adapter *adapter;
     int (*register_set)(struct rcio_state *state, u8 page, u8 offset, const u16 *values, u8 num_values);
     int (*register_get)(struct rcio_state *state, u8 page, u8 offset, u16 *values, u8 num_values);

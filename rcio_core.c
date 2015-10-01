@@ -80,13 +80,13 @@ static bool rcio_init(struct rcio_adapter *adapter)
 {
     int retval;
 
-    rcio_kobj = kobject_create_and_add("rcio", kernel_kobj);
+    rcio_state.object = kobject_create_and_add("rcio", kernel_kobj);
 
-    if (rcio_kobj == NULL) {
+    if (rcio_state.object == NULL) {
         return false;
     }
 
-    retval = sysfs_create_group(rcio_kobj, &attr_group);
+    retval = sysfs_create_group(rcio_state.object, &attr_group);
 
     if (retval) {
         goto errout_allocated;
@@ -106,13 +106,13 @@ static bool rcio_init(struct rcio_adapter *adapter)
 
 errout_adc:
 errout_allocated:
-    kobject_put(rcio_kobj);
+    kobject_put(rcio_state.object);
     return false;
 }
 
 static void rcio_exit(void)
 {
-    kobject_put(rcio_kobj);
+    kobject_put(rcio_state.object);
 }
 
 
@@ -135,7 +135,6 @@ int rcio_remove(struct rcio_adapter *adapter)
     return 0;
 }
 
-EXPORT_SYMBOL_GPL(rcio_kobj);
 EXPORT_SYMBOL_GPL(rcio_state);
 EXPORT_SYMBOL_GPL(rcio_probe);
 EXPORT_SYMBOL_GPL(rcio_remove);
