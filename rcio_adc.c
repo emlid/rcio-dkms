@@ -4,6 +4,54 @@
 #include "rcio.h"
 #include "protocol.h"
 
+struct rcio_state *rcio;
+
+static u16 adc_get_raw_adc(struct rcio_state *state, u8 channel);
+
+static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr,
+            char *buf)
+{
+    u16 channel = -1;
+
+    if (!strcmp(attr->attr.name, "ch0")) {
+        channel = adc_get_raw_adc(rcio, 0);
+    } else if (!strcmp(attr->attr.name, "ch1")) {
+        channel = adc_get_raw_adc(rcio, 1);
+    } else if (!strcmp(attr->attr.name, "ch2")) {
+        channel = adc_get_raw_adc(rcio, 2);
+    } else if (!strcmp(attr->attr.name, "ch3")) {
+        channel = adc_get_raw_adc(rcio, 3);
+    } else if (!strcmp(attr->attr.name, "ch4")) {
+        channel = adc_get_raw_adc(rcio, 4);
+    } else if (!strcmp(attr->attr.name, "ch5")) {
+        channel = adc_get_raw_adc(rcio, 5);
+    }
+
+    return sprintf(buf, "%d\n", channel);
+}
+
+static struct kobj_attribute ch0_attribute = __ATTR(ch0, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch1_attribute = __ATTR(ch1, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch2_attribute = __ATTR(ch2, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch3_attribute = __ATTR(ch3, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch4_attribute = __ATTR(ch4, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch5_attribute = __ATTR(ch5, S_IRUGO, channel_show, NULL);
+
+static struct attribute *attrs[] = {
+    &ch0_attribute.attr,
+    &ch1_attribute.attr,
+    &ch2_attribute.attr,
+    &ch3_attribute.attr,
+    &ch4_attribute.attr,
+    &ch5_attribute.attr,
+    NULL,
+};
+
+static struct attribute_group attr_group = {
+    .name = "adc",
+    .attrs = attrs,
+};
+
 static u16 adc_get_raw_adc(struct rcio_state *state, u8 channel)
 {
     return state->register_get_byte(state, PX4IO_PAGE_RAW_ADC_INPUT, channel);
@@ -11,8 +59,14 @@ static u16 adc_get_raw_adc(struct rcio_state *state, u8 channel)
 
 int rcio_adc_probe(struct rcio_state *state)
 {
-    for (int i = 0; i < 6; i++) {
-        printk(KERN_INFO "ch%d: %d\n", i, adc_get_raw_adc(state, i));
+    int ret;
+
+    rcio = state;
+
+    ret = sysfs_create_group(rcio->object, &attr_group);
+
+    if (ret < 0) {
+        printk(KERN_INFO "sysfs failed\n");
     }
 
     return 0;
