@@ -1,5 +1,6 @@
 obj-m += rcio_core.o
 obj-m += rcio_spi.o
+obj-m += rcio_adc.o
 
 PWD := $(shell pwd)
 

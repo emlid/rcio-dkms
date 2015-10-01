@@ -5,6 +5,7 @@
 #include <linux/init.h>
 
 #include "rcio.h"
+#include "rcio_adc.h"
 
 static int connected;
 
@@ -41,7 +42,41 @@ static struct attribute_group attr_group = {
 
 struct kobject *rcio_kobj;
 
-static bool rcio_init(void)
+static int register_set(struct rcio_state *state, u8 page, u8 offset, const u16 *values, u8 num_values)
+{
+    int ret;
+
+    ret = state->adapter->write(state->adapter, (page << 8) | offset, (void *)values, num_values);
+
+    return ret;
+}
+
+static int register_get(struct rcio_state *state, u8 page, u8 offset, u16 *values, u8 num_values)
+{
+    int ret;
+
+    ret = state->adapter->read(state->adapter, (page << 8) | offset, (void *)values, num_values);
+
+    return ret;
+}
+
+static int register_set_byte(struct rcio_state *state, u8 page, u8 offset, u16 value)
+{
+    return register_set(state, page, offset, &value, 1);
+}
+
+static u16 register_get_byte(struct rcio_state *state, u8 page, u8 offset)
+{
+    u16 reg;
+    
+    reg = register_get(state, page, offset, &reg, 1);
+
+    return reg;
+}
+
+struct rcio_state rcio_state;
+
+static bool rcio_init(struct rcio_adapter *adapter)
 {
     int retval;
 
@@ -57,8 +92,19 @@ static bool rcio_init(void)
         goto errout_allocated;
     }
 
+    rcio_state.adapter = adapter;
+    rcio_state.register_get = register_get;
+    rcio_state.register_set = register_set;
+    rcio_state.register_get_byte = register_get_byte;
+    rcio_state.register_set_byte = register_set_byte;
+
+    if (rcio_adc_probe(&rcio_state) < 0) {
+        goto errout_adc;
+    }
+
     return true;
 
+errout_adc:
 errout_allocated:
     kobject_put(rcio_kobj);
     return false;
@@ -70,19 +116,10 @@ static void rcio_exit(void)
 }
 
 
-int rcio_probe(struct rcio_adapter *state)
+int rcio_probe(struct rcio_adapter *adapter)
 {
-    int ret;
-    const char buffer[] = {0x02, 0x07, 0x01};
-
-    if (!rcio_init()) {
+    if (!rcio_init(adapter)) {
         goto errout_init;
-    }
-
-    ret = state->write(state, buffer, sizeof(buffer));
-
-    if (ret < 0) {
-        return ret;
     }
 
     return 0;
@@ -91,16 +128,15 @@ errout_init:
     return -EBUSY;
 }
 
-int rcio_remove(struct rcio_adapter *state)
+int rcio_remove(struct rcio_adapter *adapter)
 {
-    int ret;
-
     rcio_exit();
 
     return 0;
 }
 
 EXPORT_SYMBOL_GPL(rcio_kobj);
+EXPORT_SYMBOL_GPL(rcio_state);
 EXPORT_SYMBOL_GPL(rcio_probe);
 EXPORT_SYMBOL_GPL(rcio_remove);
 
