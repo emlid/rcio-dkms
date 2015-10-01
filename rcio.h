@@ -3,15 +3,15 @@
 
 #include <linux/mutex.h>
 
-struct rcio_state {
+struct rcio_adapter {
 	void *client;
 	struct mutex lock;
 
-    int (*read)(struct rcio_state *state, char *buffer, size_t length); 
-    int (*write)(struct rcio_state *state, const char *buffer, size_t length); 
+    int (*read)(struct rcio_adapter *state, char *buffer, size_t length); 
+    int (*write)(struct rcio_adapter *state, const char *buffer, size_t length); 
 };
 
-int rcio_probe(struct rcio_state *state);
-int rcio_remove(struct rcio_state *state);
+int rcio_probe(struct rcio_adapter *state);
+int rcio_remove(struct rcio_adapter *state);
 
 #endif /* _RCIO_H */

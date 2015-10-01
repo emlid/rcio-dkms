@@ -4,7 +4,21 @@
 
 #include "rcio.h"
 
-struct rcio_state st;
+static int rcio_spi_write(struct rcio_adapter *state, const char *buffer, size_t length)
+{
+    struct spi_device *spi = state->client;
+
+    return spi_write(spi, buffer, length);
+}
+
+static int rcio_spi_read(struct rcio_adapter *state, char *buffer, size_t length)
+{
+    struct spi_device *spi = state->client;
+
+    return spi_read(spi, buffer, length);
+}
+
+struct rcio_adapter st;
 
 static int rcio_spi_probe(struct spi_device *spi)
 {
@@ -20,11 +34,8 @@ static int rcio_spi_probe(struct spi_device *spi)
 		return ret;
 
 	st.client = spi;
-
-    u8 cmd[] = {0x01, 0x02, 0x03, 0x04, 0x05};
-    for (int i = 0; i < 10; i++) {
-        ret = spi_write_then_read(spi, cmd, sizeof(cmd), NULL, 0);
-    }
+    st.write = rcio_spi_write;
+    st.read = rcio_spi_read;
 
 	return rcio_probe(&st);
 }
