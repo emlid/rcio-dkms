@@ -19,7 +19,7 @@ static int wait_complete(struct spi_device *spi)
     if (ret < 0)
         return ret;
 
-    usleep_range(300, 500);
+    usleep_range(50, 100);
     ret = spi_write_then_read(spi, NULL, 0, (char *) buffer, sizeof(struct IOPacket));
 
     if (ret < 0)
