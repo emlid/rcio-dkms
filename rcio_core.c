@@ -75,6 +75,22 @@ static u16 register_get_byte(struct rcio_state *state, u8 page, u8 offset)
     return reg;
 }
 
+static int register_modify(struct rcio_state *state, u8 page, u8 offset, u16 clearbits, u16 setbits)
+{
+    int ret;
+    u16 value;
+
+    ret = register_get(state, page, offset, &value, 1);
+
+    if (ret < 0)
+        return ret;
+
+    value &= ~clearbits;
+    value |= setbits;
+
+    return register_set_byte(state, page, offset, value);
+}
+
 struct rcio_state rcio_state;
 
 static bool rcio_init(struct rcio_adapter *adapter)
@@ -98,6 +114,7 @@ static bool rcio_init(struct rcio_adapter *adapter)
     rcio_state.register_set = register_set;
     rcio_state.register_get_byte = register_get_byte;
     rcio_state.register_set_byte = register_set_byte;
+    rcio_state.register_modify = register_modify;
 
     if (rcio_adc_probe(&rcio_state) < 0) {
         goto errout_adc;

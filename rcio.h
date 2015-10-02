@@ -11,6 +11,7 @@ struct rcio_state
     int (*register_get)(struct rcio_state *state, u8 page, u8 offset, u16 *values, u8 num_values);
     int (*register_set_byte)(struct rcio_state *state, u8 page, u8 offset, u16 value);
     u16 (*register_get_byte)(struct rcio_state *state, u8 page, u8 offset);
+    int (*register_modify)(struct rcio_state *state, u8 page, u8 offset, u16 clearbits, u16 setbits);
 };
 
 struct rcio_adapter {
