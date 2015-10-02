@@ -18,7 +18,7 @@ static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr,
         return ret;
     }
 
-    printk(KERN_INFO "%s\n", buf);
+    printk(KERN_INFO "%s", buf);
     if (!strcmp(attr->attr.name, "ch0")) {
         pwm_set_raw_value(rcio, 0, value);
     } else if (!strcmp(attr->attr.name, "ch1")) {
