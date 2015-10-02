@@ -5,7 +5,7 @@
 
 struct rcio_state *rcio;
 
-static void pwm_set_raw_value(struct rcio_state *state, u8 channel, u16 value);
+static int pwm_set_raw_value(struct rcio_state *state, u8 channel, u16 value);
 
 static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr,
             const char *buf, size_t count)
@@ -19,17 +19,21 @@ static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr,
     }
 
     if (!strcmp(attr->attr.name, "ch0")) {
-        pwm_set_raw_value(rcio, 0, value);
+        ret = pwm_set_raw_value(rcio, 0, value);
     } else if (!strcmp(attr->attr.name, "ch1")) {
-        pwm_set_raw_value(rcio, 1, value);
+        ret = pwm_set_raw_value(rcio, 1, value);
     } else if (!strcmp(attr->attr.name, "ch2")) {
-        pwm_set_raw_value(rcio, 2, value);
+        ret = pwm_set_raw_value(rcio, 2, value);
     } else if (!strcmp(attr->attr.name, "ch3")) {
-        pwm_set_raw_value(rcio, 3, value);
+        ret = pwm_set_raw_value(rcio, 3, value);
     } else if (!strcmp(attr->attr.name, "ch4")) {
-        pwm_set_raw_value(rcio, 4, value);
+        ret = pwm_set_raw_value(rcio, 4, value);
     } else if (!strcmp(attr->attr.name, "ch5")) {
-        pwm_set_raw_value(rcio, 5, value);
+        ret = pwm_set_raw_value(rcio, 5, value);
+    }
+
+    if (ret < 0) {
+        return -EBUSY;
     }
 
     return count;
@@ -57,9 +61,9 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
-static void pwm_set_raw_value(struct rcio_state *state, u8 channel, u16 value)
+static int pwm_set_raw_value(struct rcio_state *state, u8 channel, u16 value)
 {
-    state->register_set_byte(state, PX4IO_PAGE_DIRECT_PWM, channel, value);
+    return state->register_set_byte(state, PX4IO_PAGE_DIRECT_PWM, channel, value);
 }
 
 int rcio_pwm_probe(struct rcio_state *state)
