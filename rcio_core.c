@@ -47,7 +47,13 @@ static int register_set(struct rcio_state *state, u8 page, u8 offset, const u16 
 {
     int ret;
 
+    if (!mutex_trylock(&state->adapter->lock)) {
+        return -EBUSY;
+    }
+
     ret = state->adapter->write(state->adapter, (page << 8) | offset, (void *)values, num_values);
+
+    mutex_unlock(&state->adapter->lock);
 
     return ret;
 }
@@ -56,7 +62,13 @@ static int register_get(struct rcio_state *state, u8 page, u8 offset, u16 *value
 {
     int ret;
 
+    if (!mutex_trylock(&state->adapter->lock)) {
+        return -EBUSY;
+    }
+
     ret = state->adapter->read(state->adapter, (page << 8) | offset, (void *)values, num_values);
+
+    mutex_unlock(&state->adapter->lock);
 
     return ret;
 }

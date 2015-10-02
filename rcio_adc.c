@@ -6,12 +6,12 @@
 
 struct rcio_state *rcio;
 
-static u16 adc_get_raw_adc(struct rcio_state *state, u8 channel);
+static ssize_t adc_get_raw_adc(struct rcio_state *state, u8 channel);
 
 static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr,
             char *buf)
 {
-    u16 channel = -1;
+    ssize_t channel = -1;
 
     if (!strcmp(attr->attr.name, "ch0")) {
         channel = adc_get_raw_adc(rcio, 0);
@@ -25,6 +25,10 @@ static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr,
         channel = adc_get_raw_adc(rcio, 4);
     } else if (!strcmp(attr->attr.name, "ch5")) {
         channel = adc_get_raw_adc(rcio, 5);
+    }
+
+    if (channel < 0) {
+        return -EBUSY;
     }
 
     return sprintf(buf, "%d\n", channel);
@@ -52,9 +56,15 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
-static u16 adc_get_raw_adc(struct rcio_state *state, u8 channel)
+static ssize_t adc_get_raw_adc(struct rcio_state *state, u8 channel)
 {
-    return state->register_get_byte(state, PX4IO_PAGE_RAW_ADC_INPUT, channel);
+    u16 reg;
+
+    if (state->register_get(state, PX4IO_PAGE_RAW_ADC_INPUT, channel, &reg, 1)) {
+        return reg;
+    }
+
+    return -EBUSY;
 }
 
 int rcio_adc_probe(struct rcio_state *state)

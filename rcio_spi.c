@@ -142,6 +142,7 @@ static int rcio_spi_probe(struct spi_device *spi)
 	st.client = spi;
     st.write = rcio_spi_write;
     st.read = rcio_spi_read;
+    mutex_init(&st.lock);
 
     buffer = kmalloc(sizeof(struct IOPacket), GFP_DMA | GFP_KERNEL);
 
