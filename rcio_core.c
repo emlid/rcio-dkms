@@ -7,6 +7,7 @@
 #include "rcio.h"
 #include "rcio_adc.h"
 #include "rcio_pwm.h"
+#include "rcio_rcin.h"
 
 static int connected;
 
@@ -136,8 +137,13 @@ static bool rcio_init(struct rcio_adapter *adapter)
         goto errout_pwm;
     }
 
+    if (rcio_rcin_probe(&rcio_state) < 0) {
+        goto errout_rcin;
+    }
+
     return true;
 
+errout_rcin:
 errout_pwm:
 errout_adc:
 errout_allocated:
