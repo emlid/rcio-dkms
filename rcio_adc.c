@@ -4,9 +4,13 @@
 #include "rcio.h"
 #include "protocol.h"
 
+#define RCIO_ADC_CHANNELS_COUNT 6
+
 struct rcio_state *rcio;
 
-static ssize_t adc_get_raw_adc(struct rcio_state *state, u8 channel);
+static u16 measurements[RCIO_ADC_CHANNELS_COUNT];
+
+void rcio_adc_update(struct rcio_state *state);
 
 static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr,
             char *buf)
@@ -14,17 +18,17 @@ static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr,
     ssize_t channel = -1;
 
     if (!strcmp(attr->attr.name, "ch0")) {
-        channel = adc_get_raw_adc(rcio, 0);
+        channel = measurements[0];
     } else if (!strcmp(attr->attr.name, "ch1")) {
-        channel = adc_get_raw_adc(rcio, 1);
+        channel = measurements[1];
     } else if (!strcmp(attr->attr.name, "ch2")) {
-        channel = adc_get_raw_adc(rcio, 2);
+        channel = measurements[2];
     } else if (!strcmp(attr->attr.name, "ch3")) {
-        channel = adc_get_raw_adc(rcio, 3);
+        channel = measurements[3];
     } else if (!strcmp(attr->attr.name, "ch4")) {
-        channel = adc_get_raw_adc(rcio, 4);
+        channel = measurements[4];
     } else if (!strcmp(attr->attr.name, "ch5")) {
-        channel = adc_get_raw_adc(rcio, 5);
+        channel = measurements[5];
     }
 
     if (channel < 0) {
@@ -56,16 +60,13 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
-static ssize_t adc_get_raw_adc(struct rcio_state *state, u8 channel)
+void rcio_adc_update(struct rcio_state *state)
 {
-    u16 reg;
-
-    if (state->register_get(state, PX4IO_PAGE_RAW_ADC_INPUT, channel, &reg, 1)) {
-        return reg;
+    if (state->register_get(state, PX4IO_PAGE_RAW_ADC_INPUT, 0, measurements, RCIO_ADC_CHANNELS_COUNT) < 0) {
+        printk(KERN_INFO "[ADC]: failed to get");
     }
-
-    return -EBUSY;
 }
+
 
 int rcio_adc_probe(struct rcio_state *state)
 {
@@ -83,6 +84,7 @@ int rcio_adc_probe(struct rcio_state *state)
 }
 
 EXPORT_SYMBOL_GPL(rcio_adc_probe);
+EXPORT_SYMBOL_GPL(rcio_adc_update);
 MODULE_AUTHOR("Gerogii Staroselskii <georgii.staroselskii@emlid.com>");
 MODULE_DESCRIPTION("RCIO ADC driver");
 MODULE_LICENSE("GPL v2");

@@ -3,6 +3,9 @@
 #include <linux/sysfs.h>
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/delay.h>
+#include <linux/sched.h>
+#include <linux/kthread.h>
 
 #include "rcio.h"
 #include "rcio_adc.h"
@@ -106,6 +109,21 @@ static int register_modify(struct rcio_state *state, u8 page, u8 offset, u16 cle
 
 struct rcio_state rcio_state;
 
+struct task_struct *task;
+
+int worker(void *data)
+{
+    struct rcio_state *state = (struct rcio_state *) data;
+
+    while(!kthread_should_stop()) {
+        rcio_adc_update(state);
+        usleep_range(1000, 1500);
+        schedule();
+    } 
+
+    return 0;
+}
+
 static bool rcio_init(struct rcio_adapter *adapter)
 {
     int retval;
@@ -141,6 +159,8 @@ static bool rcio_init(struct rcio_adapter *adapter)
         goto errout_rcin;
     }
 
+    task = kthread_run(&worker, (void *)&rcio_state,"rcio_worker");
+
     return true;
 
 errout_rcin:
@@ -154,6 +174,7 @@ errout_allocated:
 static void rcio_exit(void)
 {
     kobject_put(rcio_state.object);
+    kthread_stop(task);
 }
 
 
