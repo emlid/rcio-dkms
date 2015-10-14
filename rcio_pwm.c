@@ -5,7 +5,8 @@
 
 struct rcio_state *rcio;
 
-static int pwm_set_raw_value(struct rcio_state *state, u8 channel, u16 value);
+#define RCIO_PWM_MAX_CHANNELS 6
+static u16 values[RCIO_PWM_MAX_CHANNELS] = {0};
 
 static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr,
             const char *buf, size_t count)
@@ -19,17 +20,17 @@ static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr,
     }
 
     if (!strcmp(attr->attr.name, "ch0")) {
-        ret = pwm_set_raw_value(rcio, 0, value);
+        values[0] = value;
     } else if (!strcmp(attr->attr.name, "ch1")) {
-        ret = pwm_set_raw_value(rcio, 1, value);
+        values[1] = value;
     } else if (!strcmp(attr->attr.name, "ch2")) {
-        ret = pwm_set_raw_value(rcio, 2, value);
+        values[2] = value;
     } else if (!strcmp(attr->attr.name, "ch3")) {
-        ret = pwm_set_raw_value(rcio, 3, value);
+        values[3] = value;
     } else if (!strcmp(attr->attr.name, "ch4")) {
-        ret = pwm_set_raw_value(rcio, 4, value);
+        values[4] = value;
     } else if (!strcmp(attr->attr.name, "ch5")) {
-        ret = pwm_set_raw_value(rcio, 5, value);
+        values[5] = value;
     }
 
     if (ret < 0) {
@@ -61,9 +62,9 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
-static int pwm_set_raw_value(struct rcio_state *state, u8 channel, u16 value)
+int rcio_pwm_update(struct rcio_state *state)
 {
-    return state->register_set_byte(state, PX4IO_PAGE_DIRECT_PWM, channel, value);
+    return state->register_set(state, PX4IO_PAGE_DIRECT_PWM, 0, values, RCIO_PWM_MAX_CHANNELS);
 }
 
 int rcio_pwm_probe(struct rcio_state *state)
@@ -93,6 +94,7 @@ int rcio_pwm_probe(struct rcio_state *state)
 }
 
 EXPORT_SYMBOL_GPL(rcio_pwm_probe);
+EXPORT_SYMBOL_GPL(rcio_pwm_update);
 MODULE_AUTHOR("Gerogii Staroselskii <georgii.staroselskii@emlid.com>");
 MODULE_DESCRIPTION("RCIO PWM driver");
 MODULE_LICENSE("GPL v2");

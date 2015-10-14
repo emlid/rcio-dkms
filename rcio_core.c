@@ -116,6 +116,7 @@ int worker(void *data)
     struct rcio_state *state = (struct rcio_state *) data;
 
     while (!kthread_should_stop()) {
+        rcio_pwm_update(state);
         rcio_adc_update(state);
         rcio_rcin_update(state);
         usleep_range(1000, 1500);
