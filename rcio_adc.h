@@ -4,5 +4,6 @@
 #include "rcio.h"
 
 int rcio_adc_probe(struct rcio_state* state);
+void rcio_adc_update(struct rcio_state *state);
 
 #endif
