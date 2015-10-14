@@ -4,26 +4,34 @@
 #include "protocol.h"
 #include "rcio_rcin_priv.h"
 
+#define RCIO_RCIN_MAX_CHANNELS 8
+
 struct rcio_state *rcio;
 
-static int rcin_get_raw_value(struct rcio_state *state, u8 channel);
+static int rcin_get_raw_values(struct rcio_state *state, struct rc_input_values *rc_val);
+
+static u16 measurements[RCIO_RCIN_MAX_CHANNELS] = {0};
 
 static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
     int value = -1;
 
     if (!strcmp(attr->attr.name, "ch0")) {
-        value = rcin_get_raw_value(rcio, 0);
+        value = measurements[0];
     } else if (!strcmp(attr->attr.name, "ch1")) {
-        value = rcin_get_raw_value(rcio, 1);
+        value = measurements[1];
     } else if (!strcmp(attr->attr.name, "ch2")) {
-        value = rcin_get_raw_value(rcio, 2);
+        value = measurements[2];
     } else if (!strcmp(attr->attr.name, "ch3")) {
-        value = rcin_get_raw_value(rcio, 3);
+        value = measurements[3];
     } else if (!strcmp(attr->attr.name, "ch4")) {
-        value = rcin_get_raw_value(rcio, 4);
+        value = measurements[4];
     } else if (!strcmp(attr->attr.name, "ch5")) {
-        value = rcin_get_raw_value(rcio, 5);
+        value = measurements[5];
+    } else if (!strcmp(attr->attr.name, "ch6")) {
+        value = measurements[6];
+    } else if (!strcmp(attr->attr.name, "ch7")) {
+        value = measurements[7];
     }
 
     if (value < 0) {
@@ -39,6 +47,8 @@ static struct kobj_attribute ch2_attribute = __ATTR(ch2, S_IRUSR, channel_show, 
 static struct kobj_attribute ch3_attribute = __ATTR(ch3, S_IRUSR, channel_show, NULL);
 static struct kobj_attribute ch4_attribute = __ATTR(ch4, S_IRUSR, channel_show, NULL);
 static struct kobj_attribute ch5_attribute = __ATTR(ch5, S_IRUSR, channel_show, NULL);
+static struct kobj_attribute ch6_attribute = __ATTR(ch6, S_IRUSR, channel_show, NULL);
+static struct kobj_attribute ch7_attribute = __ATTR(ch7, S_IRUSR, channel_show, NULL);
 
 static struct attribute *attrs[] = {
     &ch0_attribute.attr,
@@ -47,6 +57,8 @@ static struct attribute *attrs[] = {
     &ch3_attribute.attr,
     &ch4_attribute.attr,
     &ch5_attribute.attr,
+    &ch6_attribute.attr,
+    &ch7_attribute.attr,
     NULL,
 };
 
@@ -55,11 +67,22 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
-static int rcin_get_raw_value(struct rcio_state *state, u8 channel)
+int rcio_rcin_update(struct rcio_state *state)
+{
+    struct rc_input_values report;
+
+    rcin_get_raw_values(state, &report);
+
+    for (int i = 0; i < RCIO_RCIN_MAX_CHANNELS; i++) {
+        measurements[i] = report.values[i];
+    }
+    
+    return 0;
+}
+
+static int rcin_get_raw_values(struct rcio_state *state, struct rc_input_values *rc_val)
 {
     uint16_t status;
-    struct rc_input_values arg;
-    struct rc_input_values *rc_val = (struct rc_input_values *)&arg;
     int ret;
 
     if ((ret = state->register_get(state, PX4IO_PAGE_STATUS, PX4IO_P_STATUS_FLAGS, &status, 1)) < 0) {
@@ -89,11 +112,12 @@ static int rcin_get_raw_value(struct rcio_state *state, u8 channel)
     }
 
     /* read raw R/C input values */
-    if (state->register_get(state, PX4IO_PAGE_RAW_RC_INPUT, PX4IO_P_RAW_RC_BASE, &(rc_val->values[0]), 6) < 0){
+    if (state->register_get(state, PX4IO_PAGE_RAW_RC_INPUT, PX4IO_P_RAW_RC_BASE, 
+                &(rc_val->values[0]), RCIO_RCIN_MAX_CHANNELS) < 0) {
         return -EIO;
     }
-
-    return rc_val->values[channel];
+    
+    return 0;
 }
 
 int rcio_rcin_probe(struct rcio_state *state)
@@ -112,6 +136,8 @@ int rcio_rcin_probe(struct rcio_state *state)
 }
 
 EXPORT_SYMBOL_GPL(rcio_rcin_probe);
+EXPORT_SYMBOL_GPL(rcio_rcin_update);
+
 MODULE_AUTHOR("Gerogii Staroselskii <georgii.staroselskii@emlid.com>");
 MODULE_DESCRIPTION("RCIO RC Input driver");
 MODULE_LICENSE("GPL v2");
