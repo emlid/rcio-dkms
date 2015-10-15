@@ -175,8 +175,8 @@ errout_allocated:
 
 static void rcio_exit(void)
 {
-    kobject_put(rcio_state.object);
     kthread_stop(task);
+    kobject_put(rcio_state.object);
 }
 
 
