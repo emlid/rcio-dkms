@@ -11,8 +11,17 @@ static int wait_complete(struct spi_device *spi)
 {
     int ret;
 
-    ret = spi_write_then_read(spi, (char *) buffer, sizeof(struct IOPacket), (char *) buffer, sizeof(struct IOPacket));
+    buffer->crc = 0;
+    buffer->crc = crc_packet(buffer);
+
+    ret = spi_write_then_read(spi, (char *) buffer, sizeof(struct IOPacket), NULL, 0);
     
+    if (ret < 0)
+        return ret;
+
+    usleep_range(300, 500);
+    ret = spi_write_then_read(spi, NULL, 0, (char *) buffer, sizeof(struct IOPacket));
+
     if (ret < 0)
         return ret;
 
@@ -63,7 +72,7 @@ static int rcio_spi_read(struct rcio_adapter *state, u16 address, char *data, si
         /* compare the received count with the expected count */
         } else if (PKT_COUNT(*buffer) != count) {
 
-            printk(KERN_INFO "WRONG COUNT\n");
+            printk(KERN_INFO "WRONG COUNT: %d\n", PKT_COUNT(*buffer));
             /* IO returned the wrong number of registers - no point retrying */
             result = -EIO;
 
