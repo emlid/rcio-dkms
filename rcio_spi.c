@@ -156,9 +156,11 @@ static int rcio_spi_probe(struct spi_device *spi)
 
 static int rcio_spi_remove(struct spi_device *spi)
 {
+    int ret = rcio_remove(&st);
+
     kfree(buffer);
 
-    return rcio_remove(&st);
+    return ret;
 }
 
 static const struct spi_device_id rcio_id[] = {
