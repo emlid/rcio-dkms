@@ -11,7 +11,9 @@ static u16 adc_get_raw_adc(struct rcio_state *state, u8 channel)
 
 int rcio_adc_probe(struct rcio_state *state)
 {
-    printk(KERN_INFO "%d\n", adc_get_raw_adc(state, 0));
+    for (int i = 0; i < 6; i++) {
+        printk(KERN_INFO "ch%d: %d\n", i, adc_get_raw_adc(state, i));
+    }
 
     return 0;
 }
