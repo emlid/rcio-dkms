@@ -133,8 +133,6 @@ static int rcio_spi_probe(struct spi_device *spi)
 	int ret;
 
 	spi->mode = SPI_MODE_0;
-	spi->max_speed_hz = 5000000;
-	spi->bits_per_word = 8;
 
 	ret = spi_setup(spi);
 
