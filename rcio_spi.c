@@ -30,9 +30,44 @@ static int wait_complete(struct spi_device *spi)
 
 static int rcio_spi_write(struct rcio_adapter *state, u16 address, const char *data, size_t count)
 {
+    int result;
     struct spi_device *spi = state->client;
+    u16 *values = (u16 *) data;
+    u8 page = address >> 8;
+    u8 offset = address & 0xff;
 
-    return spi_write(spi, data, count);
+    if (count > PKT_MAX_REGS)
+        return -EINVAL;
+
+    buffer->count_code = count | PKT_CODE_WRITE;
+    buffer->page = page;
+    buffer->offset = offset;
+
+    memcpy(&buffer->regs[0], (void *)values, (2 * count));
+    for (unsigned i = count; i < PKT_MAX_REGS; i++)
+        buffer->regs[i] = 0x55aa;
+
+    /* start the transaction and wait for it to complete */
+    result = wait_complete(spi);
+
+    /* successful transaction? */
+    if (result == 0) {
+        uint8_t crc = buffer->crc;
+        buffer->crc = 0;
+
+        if (crc != crc_packet(buffer)) {
+            printk(KERN_INFO "WRONG CRC\n");
+            result = -EIO;
+        } else if (PKT_CODE(*buffer) == PKT_CODE_ERROR) {
+            result = -EINVAL;
+        }
+
+    }
+
+    if (result == 0)
+        result = count;
+
+    return result;
 }
 
 static int rcio_spi_read(struct rcio_adapter *state, u16 address, char *data, size_t count)
