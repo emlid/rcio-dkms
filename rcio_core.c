@@ -69,7 +69,7 @@ static u16 register_get_byte(struct rcio_state *state, u8 page, u8 offset)
 {
     u16 reg;
     
-    reg = register_get(state, page, offset, &reg, 1);
+    register_get(state, page, offset, &reg, 1);
 
     return reg;
 }
