@@ -8,6 +8,11 @@ struct rcio_state *rcio;
 #define RCIO_PWM_MAX_CHANNELS 6
 static u16 values[RCIO_PWM_MAX_CHANNELS] = {0};
 
+static u16 frequency = 50;
+static bool frequency_updated = false;
+
+static bool armed = false;
+
 static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr,
             const char *buf, size_t count)
 {
@@ -40,12 +45,68 @@ static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr,
     return count;
 }
 
+static ssize_t frequency_store(struct kobject *kobj, struct kobj_attribute *attr,
+            const char *buf, size_t count)
+{
+    int value;
+    int ret;
+
+    ret = kstrtoint(buf, 10, &value);
+    if (ret < 0) {
+        return ret;
+    }
+
+    frequency = value;
+    frequency_updated = true;
+
+    if (frequency < 0 || frequency > 1000) {
+        return -EINVAL;
+    }
+
+    return count;
+}
+
+static ssize_t armed_store(struct kobject *kobj, struct kobj_attribute *attr,
+            const char *buf, size_t count)
+{
+    int value;
+    int ret;
+
+    ret = kstrtoint(buf, 10, &value);
+    if (ret < 0) {
+        return ret;
+    }
+
+    if (value > 0) {
+        armed = true;
+    } else {
+        armed = false;
+    }
+
+    return count;
+}
+
+static ssize_t frequency_show(struct kobject *kobj, struct kobj_attribute *attr,
+            char *buf)
+{
+    return sprintf(buf, "%d\n", frequency);
+}
+
+static ssize_t armed_show(struct kobject *kobj, struct kobj_attribute *attr,
+            char *buf)
+{
+    return sprintf(buf, "%d\n", armed ? 1: 0);
+}
+
+
 static struct kobj_attribute ch0_attribute = __ATTR(ch0, S_IWUSR, NULL, channel_store);
 static struct kobj_attribute ch1_attribute = __ATTR(ch1, S_IWUSR, NULL, channel_store);
 static struct kobj_attribute ch2_attribute = __ATTR(ch2, S_IWUSR, NULL, channel_store);
 static struct kobj_attribute ch3_attribute = __ATTR(ch3, S_IWUSR, NULL, channel_store);
 static struct kobj_attribute ch4_attribute = __ATTR(ch4, S_IWUSR, NULL, channel_store);
 static struct kobj_attribute ch5_attribute = __ATTR(ch5, S_IWUSR, NULL, channel_store);
+static struct kobj_attribute frequency_attribute = __ATTR(frequency, S_IRUSR | S_IWUSR, frequency_show, frequency_store);
+static struct kobj_attribute armed_attribute = __ATTR(armed, S_IRUSR | S_IWUSR, armed_show, armed_store);
 
 static struct attribute *attrs[] = {
     &ch0_attribute.attr,
@@ -54,6 +115,8 @@ static struct attribute *attrs[] = {
     &ch3_attribute.attr,
     &ch4_attribute.attr,
     &ch5_attribute.attr,
+    &frequency_attribute.attr,
+    &armed_attribute.attr,
     NULL,
 };
 
@@ -64,7 +127,18 @@ static struct attribute_group attr_group = {
 
 int rcio_pwm_update(struct rcio_state *state)
 {
-    return state->register_set(state, PX4IO_PAGE_DIRECT_PWM, 0, values, RCIO_PWM_MAX_CHANNELS);
+    if (frequency_updated) {
+        if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, frequency) < 0) {
+            printk(KERN_INFO "Frequency not set\n");
+        }
+        frequency_updated = false;
+    }
+
+    if (armed) {
+        return state->register_set(state, PX4IO_PAGE_DIRECT_PWM, 0, values, RCIO_PWM_MAX_CHANNELS);
+    }
+
+    return true;
 }
 
 int rcio_pwm_probe(struct rcio_state *state)
@@ -74,6 +148,10 @@ int rcio_pwm_probe(struct rcio_state *state)
     rcio = state;
 
     ret = sysfs_create_group(rcio->object, &attr_group);
+
+    if (ret < 0) {
+        printk(KERN_INFO "sysfs failed\n");
+    }
 
     if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FORCE_SAFETY_OFF, PX4IO_FORCE_SAFETY_MAGIC) < 0) {
         printk("SAFETY ON\n");
@@ -85,9 +163,9 @@ int rcio_pwm_probe(struct rcio_state *state)
                 PX4IO_P_SETUP_ARMING_ALWAYS_PWM_ENABLE) < 0) {
         printk("ARMING OFF\n");
     }
-
-    if (ret < 0) {
-        printk(KERN_INFO "sysfs failed\n");
+    
+    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_ALTRATE, frequency) < 0) {
+        printk("Frequency not set\n");
     }
 
     return 0;
