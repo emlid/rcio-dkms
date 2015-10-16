@@ -5,7 +5,7 @@
 
 struct rcio_state *rcio;
 
-#define RCIO_PWM_MAX_CHANNELS 6
+#define RCIO_PWM_MAX_CHANNELS 8
 static u16 values[RCIO_PWM_MAX_CHANNELS] = {0};
 
 static u16 frequency = 50;
@@ -36,7 +36,13 @@ static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr,
         values[4] = value;
     } else if (!strcmp(attr->attr.name, "ch5")) {
         values[5] = value;
+    } else if (!strcmp(attr->attr.name, "ch6")) {
+        values[6] = value;
+    } else if (!strcmp(attr->attr.name, "ch7")) {
+        values[7] = value;
     }
+
+
 
     if (ret < 0) {
         return -EBUSY;
@@ -105,6 +111,8 @@ static struct kobj_attribute ch2_attribute = __ATTR(ch2, S_IWUSR, NULL, channel_
 static struct kobj_attribute ch3_attribute = __ATTR(ch3, S_IWUSR, NULL, channel_store);
 static struct kobj_attribute ch4_attribute = __ATTR(ch4, S_IWUSR, NULL, channel_store);
 static struct kobj_attribute ch5_attribute = __ATTR(ch5, S_IWUSR, NULL, channel_store);
+static struct kobj_attribute ch6_attribute = __ATTR(ch6, S_IWUSR, NULL, channel_store);
+static struct kobj_attribute ch7_attribute = __ATTR(ch7, S_IWUSR, NULL, channel_store);
 static struct kobj_attribute frequency_attribute = __ATTR(frequency, S_IRUSR | S_IWUSR, frequency_show, frequency_store);
 static struct kobj_attribute armed_attribute = __ATTR(armed, S_IRUSR | S_IWUSR, armed_show, armed_store);
 
@@ -115,6 +123,8 @@ static struct attribute *attrs[] = {
     &ch3_attribute.attr,
     &ch4_attribute.attr,
     &ch5_attribute.attr,
+    &ch6_attribute.attr,
+    &ch7_attribute.attr,
     &frequency_attribute.attr,
     &armed_attribute.attr,
     NULL,
