@@ -63,7 +63,7 @@ static struct attribute_group attr_group = {
 void rcio_adc_update(struct rcio_state *state)
 {
     if (state->register_get(state, PX4IO_PAGE_RAW_ADC_INPUT, 0, measurements, RCIO_ADC_CHANNELS_COUNT) < 0) {
-        printk(KERN_INFO "[ADC]: failed to get");
+        ;
     }
 }
 
