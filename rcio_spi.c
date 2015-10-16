@@ -56,7 +56,6 @@ static int rcio_spi_write(struct rcio_adapter *state, u16 address, const char *d
         buffer->crc = 0;
 
         if (crc != crc_packet(buffer)) {
-            printk(KERN_INFO "WRONG CRC\n");
             result = -EIO;
         } else if (PKT_CODE(*buffer) == PKT_CODE_ERROR) {
             result = -EINVAL;
@@ -94,20 +93,17 @@ static int rcio_spi_read(struct rcio_adapter *state, u16 address, char *data, si
         buffer->crc = 0;
 
         if (crc != crc_packet(buffer)) {
-            printk(KERN_INFO "WRONG CRC\n");
             result = -EIO;
 
         /* check result in packet */
         } else if (PKT_CODE(*buffer) == PKT_CODE_ERROR) {
 
-            printk(KERN_INFO "CODE ERROR\n");
             /* IO didn't like it - no point retrying */
             result = -EINVAL;
 
         /* compare the received count with the expected count */
         } else if (PKT_COUNT(*buffer) != count) {
 
-            printk(KERN_INFO "WRONG COUNT: %d\n", PKT_COUNT(*buffer));
             /* IO returned the wrong number of registers - no point retrying */
             result = -EIO;
 
