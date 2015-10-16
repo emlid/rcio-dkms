@@ -174,7 +174,7 @@ int rcio_pwm_probe(struct rcio_state *state)
         printk("ARMING OFF\n");
     }
     
-    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_ALTRATE, frequency) < 0) {
+    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, frequency) < 0) {
         printk("Frequency not set\n");
     }
 
