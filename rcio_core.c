@@ -126,14 +126,14 @@ int worker(void *data)
     return 0;
 }
 
-static bool rcio_init(struct rcio_adapter *adapter)
+static int rcio_init(struct rcio_adapter *adapter)
 {
     int retval;
 
     rcio_state.object = kobject_create_and_add("rcio", kernel_kobj);
 
     if (rcio_state.object == NULL) {
-        return false;
+        return -EINVAL;
     }
 
     retval = sysfs_create_group(rcio_state.object, &attr_group);
@@ -163,14 +163,14 @@ static bool rcio_init(struct rcio_adapter *adapter)
 
     task = kthread_run(&worker, (void *)&rcio_state,"rcio_worker");
 
-    return true;
+    return 0;
 
 errout_rcin:
 errout_pwm:
 errout_adc:
 errout_allocated:
     kobject_put(rcio_state.object);
-    return false;
+    return -EIO;
 }
 
 static void rcio_exit(void)
