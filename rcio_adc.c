@@ -60,11 +60,19 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
+unsigned long timeout;
+
 void rcio_adc_update(struct rcio_state *state)
 {
+    if (time_before(jiffies, timeout)) {
+        return;
+    }
+
     if (state->register_get(state, PX4IO_PAGE_RAW_ADC_INPUT, 0, measurements, RCIO_ADC_CHANNELS_COUNT) < 0) {
         ;
     }
+
+    timeout = jiffies + HZ / 50; /* timeout in 0.05s */
 }
 
 
@@ -73,6 +81,8 @@ int rcio_adc_probe(struct rcio_state *state)
     int ret;
 
     rcio = state;
+
+    timeout = jiffies + HZ / 50; /* timeout in 0.05s */
 
     ret = sysfs_create_group(rcio->object, &attr_group);
 
