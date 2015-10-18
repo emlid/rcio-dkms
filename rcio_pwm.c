@@ -6,6 +6,8 @@
 #include "protocol.h"
 
 struct rcio_state *rcio;
+struct rcio_pwm *pwm;
+
 static int rcio_pwm_safety_off(struct rcio_state *state);
 
 static int rcio_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm);
@@ -221,8 +223,6 @@ int rcio_pwm_probe(struct rcio_state *state)
 
 static int rcio_pwm_create_sysfs_handle(void)
 {
-    struct rcio_pwm *pwm;
-
     pwm = kzalloc(sizeof(struct rcio_pwm), GFP_KERNEL);
     
     if (!pwm)
