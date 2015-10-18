@@ -195,6 +195,7 @@ errout_init:
 int rcio_remove(struct rcio_adapter *adapter)
 {
     rcio_exit();
+    rcio_pwm_exit(&rcio_state);
 
     return 0;
 }
