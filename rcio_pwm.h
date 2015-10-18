@@ -5,5 +5,6 @@
 
 int rcio_pwm_probe(struct rcio_state* state);
 int rcio_pwm_update(struct rcio_state *state);
+void rcio_pwm_exit(struct rcio_state *state);
 
 #endif
