@@ -1,10 +1,25 @@
 #include <linux/module.h>
+#include <linux/pwm.h>
 
 #include "rcio.h"
 #include "protocol.h"
 
 struct rcio_state *rcio;
 static int rcio_pwm_safety_off(struct rcio_state *state);
+
+struct rcio_pwm {
+    struct pwm_chip chip;
+    struct rcio_state *rcio;
+};
+
+static const struct pwm_ops rcio_pwm_ops = {
+    .enable = NULL,
+    .disable = NULL,
+    .config = NULL,
+    .request = NULL,
+    .free = NULL,
+    .owner = THIS_MODULE,
+};
 
 #define RCIO_PWM_MAX_CHANNELS 8
 static u16 values[RCIO_PWM_MAX_CHANNELS] = {0};
