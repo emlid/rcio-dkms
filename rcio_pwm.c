@@ -113,8 +113,8 @@ static struct kobj_attribute ch4_attribute = __ATTR(ch4, S_IWUSR, NULL, channel_
 static struct kobj_attribute ch5_attribute = __ATTR(ch5, S_IWUSR, NULL, channel_store);
 static struct kobj_attribute ch6_attribute = __ATTR(ch6, S_IWUSR, NULL, channel_store);
 static struct kobj_attribute ch7_attribute = __ATTR(ch7, S_IWUSR, NULL, channel_store);
-static struct kobj_attribute frequency_attribute = __ATTR(frequency, S_IRUSR | S_IWUSR, frequency_show, frequency_store);
-static struct kobj_attribute armed_attribute = __ATTR(armed, S_IRUSR | S_IWUSR, armed_show, armed_store);
+static struct kobj_attribute frequency_attribute = __ATTR_RW(frequency);
+static struct kobj_attribute armed_attribute = __ATTR_RW(armed);
 
 static struct attribute *attrs[] = {
     &ch0_attribute.attr,
