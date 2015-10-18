@@ -13,6 +13,8 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int du
 static int rcio_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm);
 static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm);
 
+static int rcio_pwm_create_sysfs_handle(void);
+
 struct rcio_pwm {
     struct pwm_chip chip;
     struct rcio_state *rcio;
@@ -205,12 +207,47 @@ int rcio_pwm_probe(struct rcio_state *state)
     }
     
     if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, frequency) < 0) {
-        printk("Frequency not set");
+        pr_err("Frequency not set");
         return -ENOTCONN;
+    }
+
+    if (rcio_pwm_create_sysfs_handle() < 0) {
+        pr_warn("Generic PWM interface for RCIO not created");
     }
 
     return 0;
 }
+
+static int rcio_pwm_create_sysfs_handle(void)
+{
+    return 0;
+}
+
+static int rcio_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
+{
+    return 0;
+}
+
+static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
+{
+
+}
+
+static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int duty_ns, int period_ns)
+{
+    return 0;
+}
+
+static int rcio_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm)
+{
+    return 0;
+}
+
+static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm)
+{
+
+}
+
 
 EXPORT_SYMBOL_GPL(rcio_pwm_probe);
 EXPORT_SYMBOL_GPL(rcio_pwm_update);
