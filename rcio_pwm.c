@@ -7,17 +7,23 @@
 struct rcio_state *rcio;
 static int rcio_pwm_safety_off(struct rcio_state *state);
 
+static int rcio_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm);
+static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm);
+static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int duty_ns, int period_ns);
+static int rcio_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm);
+static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm);
+
 struct rcio_pwm {
     struct pwm_chip chip;
     struct rcio_state *rcio;
 };
 
 static const struct pwm_ops rcio_pwm_ops = {
-    .enable = NULL,
-    .disable = NULL,
-    .config = NULL,
-    .request = NULL,
-    .free = NULL,
+    .enable = rcio_pwm_enable,
+    .disable = rcio_pwm_disable,
+    .config = rcio_pwm_config,
+    .request = rcio_pwm_request,
+    .free = rcio_pwm_free,
     .owner = THIS_MODULE,
 };
 
