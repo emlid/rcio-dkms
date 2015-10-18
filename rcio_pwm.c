@@ -4,6 +4,7 @@
 #include "protocol.h"
 
 struct rcio_state *rcio;
+static int rcio_pwm_safety_off(struct rcio_state *state);
 
 #define RCIO_PWM_MAX_CHANNELS 8
 static u16 values[RCIO_PWM_MAX_CHANNELS] = {0};
@@ -151,6 +152,11 @@ int rcio_pwm_update(struct rcio_state *state)
     return true;
 }
 
+static int rcio_pwm_safety_off(struct rcio_state *state)
+{
+    return state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FORCE_SAFETY_OFF, PX4IO_FORCE_SAFETY_MAGIC);
+}
+
 int rcio_pwm_probe(struct rcio_state *state)
 {
     int ret;
@@ -160,22 +166,26 @@ int rcio_pwm_probe(struct rcio_state *state)
     ret = sysfs_create_group(rcio->object, &attr_group);
 
     if (ret < 0) {
-        printk(KERN_INFO "sysfs failed\n");
+        pr_err("PWM node not created");
+        return ret;
     }
 
-    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FORCE_SAFETY_OFF, PX4IO_FORCE_SAFETY_MAGIC) < 0) {
-        printk("SAFETY ON\n");
+    if (rcio_pwm_safety_off(state) < 0) {
+        pr_err("SAFETY ON");
+        return -ENOTCONN;
     }
 
     if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_ARMING, 
                 PX4IO_P_SETUP_ARMING_IO_ARM_OK | 
                 PX4IO_P_SETUP_ARMING_FMU_ARMED |
                 PX4IO_P_SETUP_ARMING_ALWAYS_PWM_ENABLE) < 0) {
-        printk("ARMING OFF\n");
+        pr_err("ARMING OFF");
+        return -ENOTCONN;
     }
     
     if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, frequency) < 0) {
-        printk("Frequency not set\n");
+        printk("Frequency not set");
+        return -ENOTCONN;
     }
 
     return 0;
