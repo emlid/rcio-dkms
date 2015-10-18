@@ -1,5 +1,6 @@
 #include <linux/module.h>
 #include <linux/pwm.h>
+#include <linux/slab.h>
 
 #include "rcio.h"
 #include "protocol.h"
@@ -220,7 +221,18 @@ int rcio_pwm_probe(struct rcio_state *state)
 
 static int rcio_pwm_create_sysfs_handle(void)
 {
-    return 0;
+    struct rcio_pwm *pwm;
+
+    pwm = kzalloc(sizeof(struct rcio_pwm), GFP_KERNEL);
+    
+    if (!pwm)
+        return -ENOMEM;
+
+    pwm->chip.ops = &rcio_pwm_ops;
+    pwm->chip.npwm = RCIO_PWM_MAX_CHANNELS;
+    pwm->chip.can_sleep = false;
+
+    return pwmchip_add(&pwm->chip);
 }
 
 static int rcio_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
