@@ -261,7 +261,11 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int du
 {
     struct rcio_pwm *handle = to_rcio_pwm(chip);
 
-    printk(KERN_INFO "hwpwm=%d duty=%d period=%d\n", pwm->hwpwm, duty_ns, period_ns);
+    u16 duty_ms = duty_ns / 1000;
+
+    u16 freq = 1000000000 / period_ns;
+
+    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u freq=%u\n", pwm->hwpwm, duty_ns, period_ns, duty_ms, freq);
 
     return 0;
 }
