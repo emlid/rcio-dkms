@@ -67,9 +67,15 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
+unsigned long timeout;
+
 int rcio_rcin_update(struct rcio_state *state)
 {
     struct rc_input_values report;
+
+    if (time_before(jiffies, timeout)) {
+        return 0;
+    }
 
     rcin_get_raw_values(state, &report);
 
@@ -77,6 +83,25 @@ int rcio_rcin_update(struct rcio_state *state)
         measurements[i] = report.values[i];
     }
     
+    timeout = jiffies + HZ / 100; /* timeout in 100 mS */
+
+    return 0;
+}
+
+int rcio_rcin_probe(struct rcio_state *state)
+{
+    int ret;
+
+    rcio = state;
+
+    timeout = jiffies + HZ / 100; /* timeout in 100 ms */
+
+    ret = sysfs_create_group(rcio->object, &attr_group);
+
+    if (ret < 0) {
+        printk(KERN_INFO "sysfs failed\n");
+    }
+
     return 0;
 }
 
@@ -117,21 +142,6 @@ static int rcin_get_raw_values(struct rcio_state *state, struct rc_input_values 
         return -EIO;
     }
     
-    return 0;
-}
-
-int rcio_rcin_probe(struct rcio_state *state)
-{
-    int ret;
-
-    rcio = state;
-
-    ret = sysfs_create_group(rcio->object, &attr_group);
-
-    if (ret < 0) {
-        printk(KERN_INFO "sysfs failed\n");
-    }
-
     return 0;
 }
 
