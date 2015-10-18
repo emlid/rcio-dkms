@@ -32,6 +32,11 @@ static const struct pwm_ops rcio_pwm_ops = {
     .owner = THIS_MODULE,
 };
 
+static inline struct rcio_pwm *to_rcio_pwm(struct pwm_chip *chip)
+{
+    return container_of(chip, struct rcio_pwm, chip);
+}
+
 #define RCIO_PWM_MAX_CHANNELS 8
 static u16 values[RCIO_PWM_MAX_CHANNELS] = {0};
 
@@ -242,16 +247,22 @@ static int rcio_pwm_create_sysfs_handle(void)
 
 static int rcio_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
+    armed = true;
+
     return 0;
 }
 
 static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-
+    armed = false;
 }
 
 static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int duty_ns, int period_ns)
 {
+    struct rcio_pwm *handle = to_rcio_pwm(chip);
+
+    printk(KERN_INFO "hwpwm=%d duty=%d period=%d\n", pwm->hwpwm, duty_ns, period_ns);
+
     return 0;
 }
 
