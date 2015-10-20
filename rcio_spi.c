@@ -147,7 +147,11 @@ static int rcio_spi_probe(struct spi_device *spi)
         return -ENOMEM;
     }
 
-	return rcio_probe(&st);
+	if (rcio_probe(&st) < 0) {
+        kfree(buffer);
+    }
+
+    return 0;
 }
 
 static int rcio_spi_remove(struct spi_device *spi)
