@@ -182,7 +182,7 @@ static void rcio_exit(void)
 
 int rcio_probe(struct rcio_adapter *adapter)
 {
-    if (!rcio_init(adapter)) {
+    if (rcio_init(adapter) < 0) {
         goto errout_init;
     }
 
