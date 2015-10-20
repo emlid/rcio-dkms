@@ -15,8 +15,9 @@ struct rcio_state
 };
 
 struct rcio_adapter {
-	void *client;
-	struct mutex lock;
+    void *client;
+    struct device *dev;
+    struct mutex lock;
 
     int (*read)(struct rcio_adapter *state, u16 address, char *buffer, size_t length); 
     int (*write)(struct rcio_adapter *state, u16 address, const char *buffer, size_t length); 
