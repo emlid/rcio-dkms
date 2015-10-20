@@ -146,9 +146,11 @@ static int rcio_spi_probe(struct spi_device *spi)
         printk(KERN_INFO "No memory\n");
         return -ENOMEM;
     }
-
-	if (rcio_probe(&st) < 0) {
+    
+    ret = rcio_probe(&st);
+	if (ret < 0) {
         kfree(buffer);
+        return ret;
     }
 
     return 0;
@@ -157,6 +159,11 @@ static int rcio_spi_probe(struct spi_device *spi)
 static int rcio_spi_remove(struct spi_device *spi)
 {
     int ret = rcio_remove(&st);
+
+    if (ret < 0) {
+        dev_err(&spi->dev, "rcio_remove=%d", ret);
+        return ret;
+    }
 
     kfree(buffer);
 

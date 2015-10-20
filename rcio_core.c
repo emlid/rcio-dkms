@@ -161,7 +161,7 @@ errout_allocated:
     return -EIO;
 }
 
-static void rcio_exit(void)
+static void rcio_stop(void)
 {
     kobject_put(rcio_state.object);
 }
@@ -181,11 +181,15 @@ errout_init:
 
 int rcio_remove(struct rcio_adapter *adapter)
 {
-    kthread_stop(task);
-    rcio_pwm_exit(&rcio_state);
-    rcio_exit();
+    int ret;
 
-    return 0;
+    kthread_stop(task);
+
+    ret = rcio_pwm_remove(&rcio_state);
+
+    rcio_stop();
+
+    return ret;
 }
 
 EXPORT_SYMBOL_GPL(rcio_state);
