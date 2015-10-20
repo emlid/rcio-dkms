@@ -226,10 +226,18 @@ int rcio_pwm_probe(struct rcio_state *state)
     return 0;
 }
 
-void rcio_pwm_exit(struct rcio_state *state)
+int rcio_pwm_remove(struct rcio_state *state)
 {
-    pwmchip_remove(&pwm->chip);
+    int ret;
+
+    ret = pwmchip_remove(&pwm->chip);
+
+    if (ret < 0)
+        return ret;
+
     kfree(pwm);    
+
+    return 0;
 }
 
 static int rcio_pwm_create_sysfs_handle(void)
@@ -287,7 +295,7 @@ static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm)
 
 
 EXPORT_SYMBOL_GPL(rcio_pwm_probe);
-EXPORT_SYMBOL_GPL(rcio_pwm_exit);
+EXPORT_SYMBOL_GPL(rcio_pwm_remove);
 EXPORT_SYMBOL_GPL(rcio_pwm_update);
 MODULE_AUTHOR("Gerogii Staroselskii <georgii.staroselskii@emlid.com>");
 MODULE_DESCRIPTION("RCIO PWM driver");
