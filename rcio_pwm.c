@@ -220,7 +220,7 @@ int rcio_pwm_probe(struct rcio_state *state)
     }
 
     if (rcio_pwm_create_sysfs_handle() < 0) {
-        pr_warn("Generic PWM interface for RCIO not created");
+        pr_warn("Generic PWM interface for RCIO not created\n");
     }
 
     return 0;
@@ -228,6 +228,7 @@ int rcio_pwm_probe(struct rcio_state *state)
 
 void rcio_pwm_exit(struct rcio_state *state)
 {
+    pwmchip_remove(&pwm->chip);
     kfree(pwm);    
 }
 
@@ -241,6 +242,7 @@ static int rcio_pwm_create_sysfs_handle(void)
     pwm->chip.ops = &rcio_pwm_ops;
     pwm->chip.npwm = RCIO_PWM_MAX_CHANNELS;
     pwm->chip.can_sleep = false;
+    pwm->chip.dev = rcio->adapter->dev;
 
     return pwmchip_add(&pwm->chip);
 }
@@ -263,9 +265,12 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int du
 
     u16 duty_ms = duty_ns / 1000;
 
-    u16 freq = 1000000000 / period_ns;
+    frequency = 1000000000 / period_ns;
+    frequency_updated = true;
 
-    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u freq=%u\n", pwm->hwpwm, duty_ns, period_ns, duty_ms, freq);
+    values[pwm->hwpwm] = duty_ms;
+
+//    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u freq=%u\n", pwm->hwpwm, duty_ns, period_ns, duty_ms, freq);
 
     return 0;
 }
