@@ -147,12 +147,15 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int du
 
     u16 duty_ms = duty_ns / 1000;
 
-    frequency = 1000000000 / period_ns;
-    frequency_updated = true;
+    u16 new_frequency = 1000000000 / period_ns;
+    if (new_frequency != frequency) {
+        frequency = new_frequency;
+        frequency_updated = true;
+    }
 
     values[pwm->hwpwm] = duty_ms;
 
-//    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u freq=%u\n", pwm->hwpwm, duty_ns, period_ns, duty_ms, freq);
+//    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u freq=%u\n", pwm->hwpwm, duty_ns, period_ns, duty_ms, frequency);
 
     return 0;
 }
