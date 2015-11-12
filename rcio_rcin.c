@@ -80,6 +80,10 @@ int rcio_rcin_update(struct rcio_state *state)
     rcin_get_raw_values(state, &report);
 
     for (int i = 0; i < RCIO_RCIN_MAX_CHANNELS; i++) {
+        if (report.values[i] > 2500 || report.values[i] < 800) {
+           continue; 
+        }
+
         measurements[i] = report.values[i];
     }
     
