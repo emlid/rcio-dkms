@@ -13,7 +13,7 @@
 
                         rcio@0 {
                                 compatible = "rcio";
-                                spi-max-frequency = <8000000>;
+                                spi-max-frequency = <4000000>;
                                 reg = <0>;
                                 status = "okay";
                         };
