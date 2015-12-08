@@ -108,7 +108,6 @@ int worker(void *data)
         rcio_adc_update(state);
         rcio_rcin_update(state);
         usleep_range(1000, 1500);
-        schedule();
     } 
 
     return 0;
