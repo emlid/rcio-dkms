@@ -41,6 +41,12 @@ static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr, c
     return sprintf(buf, "%d\n", value);
 }
 
+static bool connected; 
+static ssize_t connected_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d\n", connected? 1: 0);
+}
+
 static struct kobj_attribute ch0_attribute = __ATTR(ch0, S_IRUSR, channel_show, NULL);
 static struct kobj_attribute ch1_attribute = __ATTR(ch1, S_IRUSR, channel_show, NULL);
 static struct kobj_attribute ch2_attribute = __ATTR(ch2, S_IRUSR, channel_show, NULL);
@@ -49,6 +55,7 @@ static struct kobj_attribute ch4_attribute = __ATTR(ch4, S_IRUSR, channel_show, 
 static struct kobj_attribute ch5_attribute = __ATTR(ch5, S_IRUSR, channel_show, NULL);
 static struct kobj_attribute ch6_attribute = __ATTR(ch6, S_IRUSR, channel_show, NULL);
 static struct kobj_attribute ch7_attribute = __ATTR(ch7, S_IRUSR, channel_show, NULL);
+static struct kobj_attribute connected_attribute = __ATTR(connected, S_IRUSR, connected_show, NULL);
 
 static struct attribute *attrs[] = {
     &ch0_attribute.attr,
@@ -59,6 +66,7 @@ static struct attribute *attrs[] = {
     &ch5_attribute.attr,
     &ch6_attribute.attr,
     &ch7_attribute.attr,
+    &connected_attribute.attr,
     NULL,
 };
 
@@ -69,15 +77,26 @@ static struct attribute_group attr_group = {
 
 unsigned long timeout;
 
-int rcio_rcin_update(struct rcio_state *state)
+bool rcio_rcin_update(struct rcio_state *state)
 {
+    int ret;
     struct rc_input_values report;
 
     if (time_before(jiffies, timeout)) {
-        return 0;
+        return false;
     }
 
-    rcin_get_raw_values(state, &report);
+    ret = rcin_get_raw_values(state, &report);
+
+    if (ret == -ENOTCONN) {
+        connected = false;
+        return true;
+    } else if (ret < 0) {
+        connected = false;
+        return false;
+    }
+
+    connected = true;
 
     for (int i = 0; i < RCIO_RCIN_MAX_CHANNELS; i++) {
         if (report.values[i] > 2500 || report.values[i] < 800) {
@@ -89,7 +108,7 @@ int rcio_rcin_update(struct rcio_state *state)
     
     timeout = jiffies + HZ / 100; /* timeout in 100 mS */
 
-    return 0;
+    return true;
 }
 
 int rcio_rcin_probe(struct rcio_state *state)
@@ -105,6 +124,8 @@ int rcio_rcin_probe(struct rcio_state *state)
     if (ret < 0) {
         printk(KERN_INFO "sysfs failed\n");
     }
+
+    connected = false;
 
     return 0;
 }
