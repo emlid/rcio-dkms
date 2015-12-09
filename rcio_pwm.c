@@ -208,7 +208,6 @@ static int pwm_set_initial_rc_channel_config(struct rcio_state *state, struct pw
     }
 
     
-    state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_SET_DEBUG, 1);
     int ret = state->register_set(state, PX4IO_PAGE_RC_CONFIG, offset, regs, PX4IO_P_RC_CONFIG_STRIDE);
 
     return ret;
@@ -228,7 +227,7 @@ static int pwm_set_initial_rc_config(struct rcio_state *state)
         if (pwm_set_initial_rc_channel_config(state, &config) < 0) {
             pr_err("RC config %d not set", channel);
         } else {
-            pr_warn("RC config %d set successfully", channel);
+            pr_debug("RC config %d set successfully", channel);
         }
 
     }

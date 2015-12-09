@@ -54,7 +54,7 @@ bool rcio_status_update(struct rcio_state *state)
 
     alive = true;
 
-    printk(KERN_INFO "regs: 0x%x\n", regs[0]);
+    pr_debug(KERN_INFO "regs: 0x%x\n", regs[0]);
     handle_status(regs[0]);
 
     timeout = jiffies + HZ / 5; /* timeout in 0.5s */
@@ -73,7 +73,7 @@ bool rcio_status_probe(struct rcio_state *state)
     ret = sysfs_create_group(rcio->object, &attr_group);
 
     if (ret < 0) {
-        printk(KERN_INFO "sysfs failed\n");
+        pr_err(KERN_INFO "[RCIO]: status module not registered int sysfs\n");
     }
 
     init_ok = false;
