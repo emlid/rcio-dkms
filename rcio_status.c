@@ -13,15 +13,22 @@ struct rcio_state *rcio;
 bool rcio_status_update(struct rcio_state *state);
 
 static bool init_ok;
+static bool alive;
 static ssize_t init_ok_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
     return sprintf(buf, "%d\n", init_ok? 1: 0);
 }
+static ssize_t alive_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d\n", alive? 1: 0);
+}
 
 static struct kobj_attribute init_ok_attribute = __ATTR(init_ok, S_IRUGO, init_ok_show, NULL);
+static struct kobj_attribute alive_attribute = __ATTR_RO(alive);
 
 static struct attribute *attrs[] = {
     &init_ok_attribute.attr,
+    &alive_attribute.attr,
     NULL,
 };
 
@@ -41,8 +48,11 @@ bool rcio_status_update(struct rcio_state *state)
     }
 
     if (state->register_get(state, PX4IO_PAGE_STATUS, PX4IO_P_STATUS_FLAGS, regs, ARRAY_SIZE(regs)) < 0) {
+        alive = false;
         return false;
     }
+
+    alive = true;
 
     printk(KERN_INFO "regs: 0x%x\n", regs[0]);
     handle_status(regs[0]);
