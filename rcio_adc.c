@@ -10,7 +10,7 @@ struct rcio_state *rcio;
 
 static u16 measurements[RCIO_ADC_CHANNELS_COUNT];
 
-void rcio_adc_update(struct rcio_state *state);
+bool rcio_adc_update(struct rcio_state *state);
 
 static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr,
             char *buf)
@@ -62,17 +62,18 @@ static struct attribute_group attr_group = {
 
 unsigned long timeout;
 
-void rcio_adc_update(struct rcio_state *state)
+bool rcio_adc_update(struct rcio_state *state)
 {
     if (time_before(jiffies, timeout)) {
-        return;
+        return false;
     }
 
     if (state->register_get(state, PX4IO_PAGE_RAW_ADC_INPUT, 0, measurements, RCIO_ADC_CHANNELS_COUNT) < 0) {
-        ;
+        return false;
     }
 
     timeout = jiffies + HZ / 50; /* timeout in 0.05s */
+    return true;
 }
 
 
