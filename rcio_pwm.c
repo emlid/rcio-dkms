@@ -8,7 +8,18 @@
 struct rcio_state *rcio;
 struct rcio_pwm *pwm;
 
+struct pwm_output_rc_config {
+    uint8_t channel;
+    uint16_t rc_min;
+    uint16_t rc_trim;
+    uint16_t rc_max;
+    uint16_t rc_dz;
+    uint16_t rc_assignment;
+    bool     rc_reverse;
+};
+
 static int rcio_pwm_safety_off(struct rcio_state *state);
+static int pwm_set_initial_rc_config(struct rcio_state *state);
 
 static int rcio_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm);
 static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm);
@@ -90,6 +101,11 @@ int rcio_pwm_probe(struct rcio_state *state)
         return -ENOTCONN;
     }   
     
+    if (pwm_set_initial_rc_config(state) < 0) {
+        pr_err("Initial RC config not set");
+        return -EINVAL;
+    }
+
     ret = rcio_pwm_create_sysfs_handle();
 
     if (ret < 0) {
@@ -168,6 +184,56 @@ static int rcio_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm)
 static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm)
 {
 
+}
+
+static int pwm_set_initial_rc_channel_config(struct rcio_state *state, struct pwm_output_rc_config *config)
+{
+    if (config->channel >= RCIO_PWM_MAX_CHANNELS) {
+        /* fail with error */
+        return -E2BIG;
+    }
+
+    /* copy values to registers in IO */
+    uint16_t regs[PX4IO_P_RC_CONFIG_STRIDE];
+    uint16_t offset = config->channel * PX4IO_P_RC_CONFIG_STRIDE;
+    regs[PX4IO_P_RC_CONFIG_MIN]        = config->rc_min;
+    regs[PX4IO_P_RC_CONFIG_CENTER]     = config->rc_trim;
+    regs[PX4IO_P_RC_CONFIG_MAX]        = config->rc_max;
+    regs[PX4IO_P_RC_CONFIG_DEADZONE]   = config->rc_dz;
+    regs[PX4IO_P_RC_CONFIG_ASSIGNMENT] = config->rc_assignment;
+    regs[PX4IO_P_RC_CONFIG_OPTIONS]    = PX4IO_P_RC_CONFIG_OPTIONS_ENABLED;
+
+    if (config->rc_reverse) {
+        regs[PX4IO_P_RC_CONFIG_OPTIONS] |= PX4IO_P_RC_CONFIG_OPTIONS_REVERSE;
+    }
+
+    
+    state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_SET_DEBUG, 1);
+    int ret = state->register_set(state, PX4IO_PAGE_RC_CONFIG, offset, regs, PX4IO_P_RC_CONFIG_STRIDE);
+
+    return ret;
+}
+
+static int pwm_set_initial_rc_config(struct rcio_state *state)
+{
+    struct pwm_output_rc_config config = {
+        .rc_min = 900,
+        .rc_trim = 1500,
+        .rc_max = 2000,
+        .rc_dz = 10,
+    };
+
+    for (int channel = 0; channel < RCIO_PWM_MAX_CHANNELS; channel++) {
+        config.channel = channel;
+        if (pwm_set_initial_rc_channel_config(state, &config) < 0) {
+            pr_err("RC config %d not set", channel);
+        } else {
+            pr_warn("RC config %d set successfully", channel);
+        }
+
+    }
+
+    return 0;
 }
 
 
