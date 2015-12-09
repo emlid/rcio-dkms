@@ -45,7 +45,7 @@ static bool frequency_updated = false;
 
 static bool armed = false;
 
-int rcio_pwm_update(struct rcio_state *state)
+bool rcio_pwm_update(struct rcio_state *state)
 {
     if (frequency_updated) {
         if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, frequency) < 0) {
