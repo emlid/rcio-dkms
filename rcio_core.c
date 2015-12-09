@@ -11,6 +11,7 @@
 #include "rcio_adc.h"
 #include "rcio_pwm.h"
 #include "rcio_rcin.h"
+#include "rcio_status.h"
 
 static int connected;
 
@@ -102,11 +103,23 @@ struct task_struct *task;
 int worker(void *data)
 {
     struct rcio_state *state = (struct rcio_state *) data;
+    int fail_counter = 0;
+    bool pwm_updated = false;
+    bool adc_updated = false;
+    bool rcin_updated = false;
 
     while (!kthread_should_stop()) {
-        rcio_pwm_update(state);
-        rcio_adc_update(state);
-        rcio_rcin_update(state);
+        pwm_updated = rcio_pwm_update(state);
+        adc_updated = rcio_adc_update(state);
+        rcin_updated = rcio_rcin_update(state);
+        rcio_status_update(state);
+
+        if (pwm_updated || adc_updated || rcin_updated) {
+            fail_counter = 0;
+        } else {
+            fail_counter++;
+        }
+
         usleep_range(1000, 1500);
     } 
 
@@ -148,10 +161,15 @@ static int rcio_init(struct rcio_adapter *adapter)
         goto errout_rcin;
     }
 
+    if (rcio_status_probe(&rcio_state) < 0) {
+        goto errout_status;
+    }
+
     task = kthread_run(&worker, (void *)&rcio_state,"rcio_worker");
 
     return 0;
 
+errout_status:
 errout_rcin:
 errout_pwm:
 errout_adc:
