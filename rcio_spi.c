@@ -187,6 +187,6 @@ static struct spi_driver rcio_driver = {
 };
 module_spi_driver(rcio_driver);
 
-MODULE_AUTHOR("Gerogii Staroselskii <georgii.staroselskii@emlid.com>");
+MODULE_AUTHOR("Georgii Staroselskii <georgii.staroselskii@emlid.com>");
 MODULE_DESCRIPTION("RCIO spi driver");
 MODULE_LICENSE("GPL v2");

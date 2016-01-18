@@ -96,6 +96,6 @@ int rcio_adc_probe(struct rcio_state *state)
 
 EXPORT_SYMBOL_GPL(rcio_adc_probe);
 EXPORT_SYMBOL_GPL(rcio_adc_update);
-MODULE_AUTHOR("Gerogii Staroselskii <georgii.staroselskii@emlid.com>");
+MODULE_AUTHOR("Georgii Staroselskii <georgii.staroselskii@emlid.com>");
 MODULE_DESCRIPTION("RCIO ADC driver");
 MODULE_LICENSE("GPL v2");
