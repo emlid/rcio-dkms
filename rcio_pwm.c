@@ -48,7 +48,7 @@ static inline struct rcio_pwm *to_rcio_pwm(struct pwm_chip *chip)
     return container_of(chip, struct rcio_pwm, chip);
 }
 
-#define RCIO_PWM_MAX_CHANNELS 8
+#define RCIO_PWM_MAX_CHANNELS 14
 static u16 values[RCIO_PWM_MAX_CHANNELS] = {0};
 
 static u16 frequency = 50;
