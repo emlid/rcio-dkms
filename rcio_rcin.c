@@ -173,6 +173,6 @@ static int rcin_get_raw_values(struct rcio_state *state, struct rc_input_values 
 EXPORT_SYMBOL_GPL(rcio_rcin_probe);
 EXPORT_SYMBOL_GPL(rcio_rcin_update);
 
-MODULE_AUTHOR("Gerogii Staroselskii <georgii.staroselskii@emlid.com>");
+MODULE_AUTHOR("Georgii Staroselskii <georgii.staroselskii@emlid.com>");
 MODULE_DESCRIPTION("RCIO RC Input driver");
 MODULE_LICENSE("GPL v2");

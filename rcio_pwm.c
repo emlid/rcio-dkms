@@ -239,6 +239,6 @@ static int pwm_set_initial_rc_config(struct rcio_state *state)
 EXPORT_SYMBOL_GPL(rcio_pwm_probe);
 EXPORT_SYMBOL_GPL(rcio_pwm_remove);
 EXPORT_SYMBOL_GPL(rcio_pwm_update);
-MODULE_AUTHOR("Gerogii Staroselskii <georgii.staroselskii@emlid.com>");
+MODULE_AUTHOR("Georgii Staroselskii <georgii.staroselskii@emlid.com>");
 MODULE_DESCRIPTION("RCIO PWM driver");
 MODULE_LICENSE("GPL v2");
