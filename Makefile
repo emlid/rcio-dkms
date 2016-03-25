@@ -7,11 +7,13 @@ obj-m += rcio_status.o
 
 ccflags-y := -std=gnu99
 
-KERNEL_SOURCE ?= /lib/modules/$(shell uname -r)/build
+KVERSION ?= $(shell uname -r)
+KERNEL_SOURCE ?= /lib/modules/$(KVERSION)/build
 
 all:
 	$(MAKE) -C $(KERNEL_SOURCE) M=$(PWD) modules
-	dtc -@ -I dts -O dtb rcio-overlay.dts -o rcio-overlay.dtb
+	/usr/local/bin/dtc -@ -I dts -O dtb rcio-overlay.dts -o rcio-overlay.dtb
+	cp rcio-overlay.dtb /boot/overlays
 
 clean:
 	$(MAKE) -C $(KERNEL_SOURCE) M=$(PWD) clean
