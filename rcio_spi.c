@@ -14,12 +14,14 @@ static int wait_complete(struct spi_device *spi)
     buffer->crc = 0;
     buffer->crc = crc_packet(buffer);
 
+    usleep_range(120, 150);
+
     ret = spi_write_then_read(spi, (char *) buffer, sizeof(struct IOPacket), NULL, 0);
     
     if (ret < 0)
         return ret;
 
-    usleep_range(50, 100);
+    usleep_range(120, 150);
     ret = spi_write_then_read(spi, NULL, 0, (char *) buffer, sizeof(struct IOPacket));
 
     if (ret < 0)
