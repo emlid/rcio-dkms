@@ -51,18 +51,27 @@ static inline struct rcio_pwm *to_rcio_pwm(struct pwm_chip *chip)
 #define RCIO_PWM_MAX_CHANNELS 14
 static u16 values[RCIO_PWM_MAX_CHANNELS] = {0};
 
-static u16 frequency = 50;
-static bool frequency_updated = false;
+static u16 alt_frequency = 50;
+static bool alt_frequency_updated = false;
+static u16 default_frequency = 50;
+static bool default_frequency_updated = false;
 
 static bool armed = false;
 
 bool rcio_pwm_update(struct rcio_state *state)
 {
-    if (frequency_updated) {
-        if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, frequency) < 0) {
-            printk(KERN_INFO "Frequency not set\n");
+    if (alt_frequency_updated) {
+        if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_ALTRATE, alt_frequency) < 0) {
+            printk(KERN_INFO "alt_frequency not set\n");
         }
-        frequency_updated = false;
+        alt_frequency_updated = false;
+    }
+
+    if (default_frequency_updated) {
+        if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, default_frequency) < 0) {
+            printk(KERN_INFO "default_frequency not set\n");
+        }
+        default_frequency_updated = false;
     }
 
     if (armed) {
@@ -96,8 +105,19 @@ int rcio_pwm_probe(struct rcio_state *state)
         return -ENOTCONN;
     }
     
-    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, frequency) < 0) {
-        pr_err("Frequency not set");
+     uint16_t ratemap = 0xff;
+
+    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_RATES, ratemap) < 0) {
+        return -ENOTCONN;
+    }
+
+    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_ALTRATE, alt_frequency) < 0) {
+        pr_err("alt_frequency not set");
+        return -ENOTCONN;
+    }   
+
+    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, default_frequency) < 0) {
+        pr_err("default_frequency not set");
         return -ENOTCONN;
     }   
     
@@ -164,14 +184,22 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int du
     u16 duty_ms = duty_ns / 1000;
 
     u16 new_frequency = 1000000000 / period_ns;
-    if (new_frequency != frequency) {
-        frequency = new_frequency;
-        frequency_updated = true;
+
+    if (pwm->hwpwm < 7) {
+        if (new_frequency != alt_frequency) {
+            alt_frequency = new_frequency;
+            alt_frequency_updated = true;
+        }
+    } else {
+        if (new_frequency != default_frequency) {
+            default_frequency = new_frequency;
+            default_frequency_updated = true;
+        }
     }
 
     values[pwm->hwpwm] = duty_ms;
 
-//    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u freq=%u\n", pwm->hwpwm, duty_ns, period_ns, duty_ms, frequency);
+//    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u freq=%u\n", pwm->hwpwm, duty_ns, period_ns, duty_ms, alt_frequency);
 
     return 0;
 }
@@ -209,6 +237,7 @@ static int pwm_set_initial_rc_channel_config(struct rcio_state *state, struct pw
 
     
     int ret = state->register_set(state, PX4IO_PAGE_RC_CONFIG, offset, regs, PX4IO_P_RC_CONFIG_STRIDE);
+
 
     return ret;
 }
