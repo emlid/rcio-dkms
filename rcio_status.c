@@ -7,27 +7,37 @@
 #define RCIO_ADC_CHANNELS_COUNT 6
 
 static void handle_status(uint16_t status);
+static void handle_alarms(uint16_t alarms);
 
 struct rcio_state *rcio;
 
 bool rcio_status_update(struct rcio_state *state);
 
 static bool init_ok;
+static bool pwm_ok;
 static bool alive;
 static ssize_t init_ok_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
     return sprintf(buf, "%d\n", init_ok? 1: 0);
 }
+
+static ssize_t pwm_ok_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d\n", pwm_ok? 1: 0);
+}
+
 static ssize_t alive_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
     return sprintf(buf, "%d\n", alive? 1: 0);
 }
 
 static struct kobj_attribute init_ok_attribute = __ATTR(init_ok, S_IRUGO, init_ok_show, NULL);
+static struct kobj_attribute pwm_ok_attribute = __ATTR(pwm_ok, S_IRUGO, pwm_ok_show, NULL);
 static struct kobj_attribute alive_attribute = __ATTR_RO(alive);
 
 static struct attribute *attrs[] = {
     &init_ok_attribute.attr,
+    &pwm_ok_attribute.attr,
     &alive_attribute.attr,
     NULL,
 };
@@ -54,8 +64,8 @@ bool rcio_status_update(struct rcio_state *state)
 
     alive = true;
 
-    pr_debug(KERN_INFO "regs: 0x%x\n", regs[0]);
     handle_status(regs[0]);
+    handle_alarms(regs[1]);
 
     timeout = jiffies + HZ / 5; /* timeout in 0.5s */
     return true;
@@ -87,6 +97,15 @@ static void handle_status(uint16_t status)
         init_ok = true;
     } else {
         init_ok = false;
+    }
+}
+
+static void handle_alarms(uint16_t alarms)
+{
+    if (alarms & PX4IO_P_STATUS_ALARMS_PWM_ERROR) {
+        pwm_ok = false;
+    } else {
+        pwm_ok = true;
     }
 }
 
