@@ -112,5 +112,5 @@ static void handle_alarms(uint16_t alarms)
 EXPORT_SYMBOL_GPL(rcio_status_probe);
 EXPORT_SYMBOL_GPL(rcio_status_update);
 MODULE_AUTHOR("Georgii Staroselskii <georgii.staroselskii@emlid.com>");
-MODULE_DESCRIPTION("RCIO ADC driver");
+MODULE_DESCRIPTION("RCIO status driver");
 MODULE_LICENSE("GPL v2");
