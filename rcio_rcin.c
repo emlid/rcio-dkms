@@ -106,7 +106,7 @@ bool rcio_rcin_update(struct rcio_state *state)
         measurements[i] = report.values[i];
     }
     
-    timeout = jiffies + HZ / 100; /* timeout in 100 mS */
+    timeout = jiffies + HZ / 100; /* timeout in 0.01s */
 
     return true;
 }
@@ -117,7 +117,7 @@ int rcio_rcin_probe(struct rcio_state *state)
 
     rcio = state;
 
-    timeout = jiffies + HZ / 100; /* timeout in 100 ms */
+    timeout = jiffies + HZ / 100; /* timeout in 0.01s */
 
     ret = sysfs_create_group(rcio->object, &attr_group);
 

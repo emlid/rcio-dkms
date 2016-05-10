@@ -48,7 +48,7 @@ static inline struct rcio_pwm *to_rcio_pwm(struct pwm_chip *chip)
     return container_of(chip, struct rcio_pwm, chip);
 }
 
-#define RCIO_PWM_MAX_CHANNELS 14
+#define RCIO_PWM_MAX_CHANNELS 15
 static u16 values[RCIO_PWM_MAX_CHANNELS] = {0};
 
 static u16 alt_frequency = 50;
@@ -57,6 +57,7 @@ static u16 default_frequency = 50;
 static bool default_frequency_updated = false;
 
 static bool armed = false;
+unsigned long armtimeout;
 
 bool rcio_pwm_update(struct rcio_state *state)
 {
@@ -72,6 +73,12 @@ bool rcio_pwm_update(struct rcio_state *state)
             printk(KERN_INFO "default_frequency not set\n");
         }
         default_frequency_updated = false;
+    }
+
+    if (time_before(jiffies, armtimeout) && armtimeout > 0) {
+        armed = true;
+    } else {
+        armed = false;
     }
 
     if (armed) {
@@ -184,6 +191,8 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int du
     u16 duty_ms = duty_ns / 1000;
 
     u16 new_frequency = 1000000000 / period_ns;
+
+    armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
 
     if (pwm->hwpwm < 7) {
         if (new_frequency != alt_frequency) {

@@ -72,7 +72,7 @@ bool rcio_adc_update(struct rcio_state *state)
         return false;
     }
 
-    timeout = jiffies + HZ / 50; /* timeout in 0.05s */
+    timeout = jiffies + HZ / 50; /* timeout in 0.02s */
     return true;
 }
 
@@ -83,7 +83,7 @@ int rcio_adc_probe(struct rcio_state *state)
 
     rcio = state;
 
-    timeout = jiffies + HZ / 50; /* timeout in 0.05s */
+    timeout = jiffies + HZ / 50; /* timeout in 0.02s */
 
     ret = sysfs_create_group(rcio->object, &attr_group);
 
