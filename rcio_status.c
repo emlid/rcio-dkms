@@ -67,7 +67,7 @@ bool rcio_status_update(struct rcio_state *state)
     handle_status(regs[0]);
     handle_alarms(regs[1]);
 
-    timeout = jiffies + HZ / 5; /* timeout in 0.5s */
+    timeout = jiffies + HZ / 5; /* timeout in 0.2s */
     return true;
 }
 
@@ -78,7 +78,7 @@ bool rcio_status_probe(struct rcio_state *state)
 
     rcio = state;
 
-    timeout = jiffies + HZ / 50; /* timeout in 0.05s */
+    timeout = jiffies + HZ / 50; /* timeout in 0.02s */
 
     ret = sysfs_create_group(rcio->object, &attr_group);
 
@@ -112,5 +112,5 @@ static void handle_alarms(uint16_t alarms)
 EXPORT_SYMBOL_GPL(rcio_status_probe);
 EXPORT_SYMBOL_GPL(rcio_status_update);
 MODULE_AUTHOR("Georgii Staroselskii <georgii.staroselskii@emlid.com>");
-MODULE_DESCRIPTION("RCIO ADC driver");
+MODULE_DESCRIPTION("RCIO status driver");
 MODULE_LICENSE("GPL v2");
