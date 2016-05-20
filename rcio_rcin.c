@@ -16,23 +16,13 @@ static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr, c
 {
     int value = -1;
 
-    if (!strcmp(attr->attr.name, "ch0")) {
-        value = measurements[0];
-    } else if (!strcmp(attr->attr.name, "ch1")) {
-        value = measurements[1];
-    } else if (!strcmp(attr->attr.name, "ch2")) {
-        value = measurements[2];
-    } else if (!strcmp(attr->attr.name, "ch3")) {
-        value = measurements[3];
-    } else if (!strcmp(attr->attr.name, "ch4")) {
-        value = measurements[4];
-    } else if (!strcmp(attr->attr.name, "ch5")) {
-        value = measurements[5];
-    } else if (!strcmp(attr->attr.name, "ch6")) {
-        value = measurements[6];
-    } else if (!strcmp(attr->attr.name, "ch7")) {
-        value = measurements[7];
+    int channel;
+
+    if (sscanf(attr->attr.name, "ch%d", &channel) < 0) {
+        return -EIO;
     }
+
+    value = measurements[channel];
 
     if (value < 0) {
         return value;
