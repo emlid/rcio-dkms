@@ -4,7 +4,7 @@
 #include "protocol.h"
 #include "rcio_rcin_priv.h"
 
-#define RCIO_RCIN_MAX_CHANNELS 8
+#define RCIO_RCIN_MAX_CHANNELS 14
 
 struct rcio_state *rcio;
 
@@ -47,6 +47,12 @@ static struct kobj_attribute ch4_attribute = RCIN_CHANNEL_ATTR(ch4);
 static struct kobj_attribute ch5_attribute = RCIN_CHANNEL_ATTR(ch5);
 static struct kobj_attribute ch6_attribute = RCIN_CHANNEL_ATTR(ch6);
 static struct kobj_attribute ch7_attribute = RCIN_CHANNEL_ATTR(ch7);
+static struct kobj_attribute ch8_attribute = RCIN_CHANNEL_ATTR(ch8);
+static struct kobj_attribute ch9_attribute = RCIN_CHANNEL_ATTR(ch9);
+static struct kobj_attribute ch10_attribute = RCIN_CHANNEL_ATTR(ch10);
+static struct kobj_attribute ch11_attribute = RCIN_CHANNEL_ATTR(ch11);
+static struct kobj_attribute ch12_attribute = RCIN_CHANNEL_ATTR(ch12);
+static struct kobj_attribute ch13_attribute = RCIN_CHANNEL_ATTR(ch13);
 
 static struct kobj_attribute connected_attribute = __ATTR_RO(connected);
 
@@ -59,6 +65,12 @@ static struct attribute *attrs[] = {
     &ch5_attribute.attr,
     &ch6_attribute.attr,
     &ch7_attribute.attr,
+    &ch8_attribute.attr,
+    &ch9_attribute.attr,
+    &ch10_attribute.attr,
+    &ch11_attribute.attr,
+    &ch12_attribute.attr,
+    &ch13_attribute.attr,
     &connected_attribute.attr,
     NULL,
 };
