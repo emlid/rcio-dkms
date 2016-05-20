@@ -37,15 +37,15 @@ static ssize_t connected_show(struct kobject *kobj, struct kobj_attribute *attr,
     return sprintf(buf, "%d\n", connected? 1: 0);
 }
 
-static struct kobj_attribute ch0_attribute = __ATTR(ch0, S_IRUSR, channel_show, NULL);
-static struct kobj_attribute ch1_attribute = __ATTR(ch1, S_IRUSR, channel_show, NULL);
-static struct kobj_attribute ch2_attribute = __ATTR(ch2, S_IRUSR, channel_show, NULL);
-static struct kobj_attribute ch3_attribute = __ATTR(ch3, S_IRUSR, channel_show, NULL);
-static struct kobj_attribute ch4_attribute = __ATTR(ch4, S_IRUSR, channel_show, NULL);
-static struct kobj_attribute ch5_attribute = __ATTR(ch5, S_IRUSR, channel_show, NULL);
-static struct kobj_attribute ch6_attribute = __ATTR(ch6, S_IRUSR, channel_show, NULL);
-static struct kobj_attribute ch7_attribute = __ATTR(ch7, S_IRUSR, channel_show, NULL);
-static struct kobj_attribute connected_attribute = __ATTR(connected, S_IRUSR, connected_show, NULL);
+static struct kobj_attribute ch0_attribute = __ATTR(ch0, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch1_attribute = __ATTR(ch1, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch2_attribute = __ATTR(ch2, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch3_attribute = __ATTR(ch3, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch4_attribute = __ATTR(ch4, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch5_attribute = __ATTR(ch5, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch6_attribute = __ATTR(ch6, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch7_attribute = __ATTR(ch7, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute connected_attribute = __ATTR(connected, S_IRUGO, connected_show, NULL);
 
 static struct attribute *attrs[] = {
     &ch0_attribute.attr,
