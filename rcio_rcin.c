@@ -45,7 +45,7 @@ static struct kobj_attribute ch4_attribute = __ATTR(ch4, S_IRUGO, channel_show, 
 static struct kobj_attribute ch5_attribute = __ATTR(ch5, S_IRUGO, channel_show, NULL);
 static struct kobj_attribute ch6_attribute = __ATTR(ch6, S_IRUGO, channel_show, NULL);
 static struct kobj_attribute ch7_attribute = __ATTR(ch7, S_IRUGO, channel_show, NULL);
-static struct kobj_attribute connected_attribute = __ATTR(connected, S_IRUGO, connected_show, NULL);
+static struct kobj_attribute connected_attribute = __ATTR_RO(connected);
 
 static struct attribute *attrs[] = {
     &ch0_attribute.attr,
