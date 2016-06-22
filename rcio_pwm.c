@@ -96,6 +96,7 @@ static int rcio_pwm_safety_off(struct rcio_state *state)
 int rcio_pwm_probe(struct rcio_state *state)
 {
     int ret;
+    uint16_t ratemap;
 
     rcio = state;
 
@@ -112,8 +113,7 @@ int rcio_pwm_probe(struct rcio_state *state)
         return -ENOTCONN;
     }
     
-     uint16_t ratemap = 0xff;
-
+    ratemap = 0xff;
     if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_RATES, ratemap) < 0) {
         return -ENOTCONN;
     }
@@ -186,13 +186,13 @@ static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 
 static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int duty_ns, int period_ns)
 {
-    struct rcio_pwm *handle = to_rcio_pwm(chip);
+    struct rcio_pwm *handle;
+    u16 duty_ms;
+    u16 new_frequency;
 
-    u16 duty_ms = duty_ns / 1000;
-
-    u16 new_frequency = 1000000000 / period_ns;
-
+    handle = to_rcio_pwm(chip);
     armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
+    new_frequency = 1000000000 / period_ns;
 
     if (pwm->hwpwm < 7) {
         if (new_frequency != alt_frequency) {
@@ -206,6 +206,7 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int du
         }
     }
 
+    duty_ms = duty_ns / 1000;
     values[pwm->hwpwm] = duty_ms;
 
 //    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u freq=%u\n", pwm->hwpwm, duty_ns, period_ns, duty_ms, alt_frequency);
@@ -225,14 +226,16 @@ static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm)
 
 static int pwm_set_initial_rc_channel_config(struct rcio_state *state, struct pwm_output_rc_config *config)
 {
+    uint16_t regs[PX4IO_P_RC_CONFIG_STRIDE];
+    uint16_t offset;
+
     if (config->channel >= RCIO_PWM_MAX_CHANNELS) {
         /* fail with error */
         return -E2BIG;
     }
 
     /* copy values to registers in IO */
-    uint16_t regs[PX4IO_P_RC_CONFIG_STRIDE];
-    uint16_t offset = config->channel * PX4IO_P_RC_CONFIG_STRIDE;
+    offset = config->channel * PX4IO_P_RC_CONFIG_STRIDE;
     regs[PX4IO_P_RC_CONFIG_MIN]        = config->rc_min;
     regs[PX4IO_P_RC_CONFIG_CENTER]     = config->rc_trim;
     regs[PX4IO_P_RC_CONFIG_MAX]        = config->rc_max;
@@ -244,11 +247,7 @@ static int pwm_set_initial_rc_channel_config(struct rcio_state *state, struct pw
         regs[PX4IO_P_RC_CONFIG_OPTIONS] |= PX4IO_P_RC_CONFIG_OPTIONS_REVERSE;
     }
 
-    
-    int ret = state->register_set(state, PX4IO_PAGE_RC_CONFIG, offset, regs, PX4IO_P_RC_CONFIG_STRIDE);
-
-
-    return ret;
+    return state->register_set(state, PX4IO_PAGE_RC_CONFIG, offset, regs, PX4IO_P_RC_CONFIG_STRIDE);
 }
 
 static int pwm_set_initial_rc_config(struct rcio_state *state)

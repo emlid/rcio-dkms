@@ -35,7 +35,7 @@ static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr,
         return -EBUSY;
     }
 
-    return sprintf(buf, "%d\n", channel);
+    return sprintf(buf, "%d\n", (int)channel);
 }
 
 static struct kobj_attribute ch0_attribute = __ATTR(ch0, S_IRUGO, channel_show, NULL);
