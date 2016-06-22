@@ -128,16 +128,15 @@ struct rcio_adapter st;
 
 static int rcio_spi_probe(struct spi_device *spi)
 {
-	int ret;
+    int ret;
+    spi->mode = SPI_MODE_0;
 
-	spi->mode = SPI_MODE_0;
+    ret = spi_setup(spi);
 
-	ret = spi_setup(spi);
+    if (ret < 0)
+        return ret;
 
-	if (ret < 0)
-		return ret;
-
-	st.client = spi;
+    st.client = spi;
     st.dev = &spi->dev;
     st.write = rcio_spi_write;
     st.read = rcio_spi_read;
@@ -150,7 +149,7 @@ static int rcio_spi_probe(struct spi_device *spi)
     }
     
     ret = rcio_probe(&st);
-	if (ret < 0) {
+        if (ret < 0) {
         kfree(buffer);
         return ret;
     }
