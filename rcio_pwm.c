@@ -194,7 +194,7 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int du
     armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
     new_frequency = 1000000000 / period_ns;
 
-    if (pwm->hwpwm < 7) {
+    if (pwm->hwpwm < 8) {
         if (new_frequency != alt_frequency) {
             alt_frequency = new_frequency;
             alt_frequency_updated = true;
