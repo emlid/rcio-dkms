@@ -99,6 +99,9 @@ bool rcio_rcin_update(struct rcio_state *state)
 
     if (ret == -ENOTCONN) {
         connected = false;
+        for (int i = 0; i < RCIO_RCIN_MAX_CHANNELS; i++) {
+            measurements[i] = 0;
+        }
         return true;
     } else if (ret < 0) {
         connected = false;
