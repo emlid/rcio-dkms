@@ -14,6 +14,7 @@ all:
 	$(MAKE) -C $(KERNEL_SOURCE) M=$(PWD) modules
 	/usr/local/bin/dtc -@ -I dts -O dtb rcio-overlay.dts -o rcio-overlay.dtb
 	cp rcio-overlay.dtb /boot/overlays
+	cp rcio-overlay.dtb /boot/overlays/rcio.dtbo
 
 install:
 	$(MAKE) -C $(KERNEL_SOURCE) M=$(PWD) modules_install
