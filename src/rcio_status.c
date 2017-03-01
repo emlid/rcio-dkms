@@ -9,31 +9,34 @@
 static void handle_status(uint16_t status);
 static void handle_alarms(uint16_t alarms);
 
-struct rcio_state *rcio;
+static struct rcio_status {
+    unsigned long timeout;
+    bool init_ok;
+    bool pwm_ok;
+    bool alive;
+    struct rcio_state *rcio;
+} status;
 
 bool rcio_status_update(struct rcio_state *state);
 
-static bool init_ok;
-static bool pwm_ok;
-static bool alive;
 static ssize_t init_ok_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-    return sprintf(buf, "%d\n", init_ok? 1: 0);
+    return sprintf(buf, "%d\n", status.init_ok? 1: 0);
 }
 
 static ssize_t pwm_ok_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-    return sprintf(buf, "%d\n", pwm_ok? 1: 0);
+    return sprintf(buf, "%d\n", status.pwm_ok? 1: 0);
 }
 
 static ssize_t alive_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-    return sprintf(buf, "%d\n", alive? 1: 0);
+    return sprintf(buf, "%d\n", status.alive? 1: 0);
 }
 
-static struct kobj_attribute init_ok_attribute = __ATTR(init_ok, S_IRUGO, init_ok_show, NULL);
-static struct kobj_attribute pwm_ok_attribute = __ATTR(pwm_ok, S_IRUGO, pwm_ok_show, NULL);
-static struct kobj_attribute alive_attribute = __ATTR_RO(alive);
+static struct kobj_attribute init_ok_attribute = __ATTR(status.init_ok, S_IRUGO, init_ok_show, NULL);
+static struct kobj_attribute pwm_ok_attribute = __ATTR(status.pwm_ok, S_IRUGO, pwm_ok_show, NULL);
+static struct kobj_attribute alive_attribute = __ATTR(status.alive, S_IRUGO, alive_show, NULL);
 
 static struct attribute *attrs[] = {
     &init_ok_attribute.attr,
@@ -47,27 +50,25 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
-unsigned long timeout;
-
 bool rcio_status_update(struct rcio_state *state)
 {
     uint16_t regs[6];
 
-    if (time_before(jiffies, timeout)) {
+    if (time_before(jiffies, status.timeout)) {
         return false;
     }
 
     if (state->register_get(state, PX4IO_PAGE_STATUS, PX4IO_P_STATUS_FLAGS, regs, ARRAY_SIZE(regs)) < 0) {
-        alive = false;
+        status.alive = false;
         return false;
     }
 
-    alive = true;
+    status.alive = true;
 
     handle_status(regs[0]);
     handle_alarms(regs[1]);
 
-    timeout = jiffies + HZ / 5; /* timeout in 0.2s */
+    status.timeout = jiffies + HZ / 5; /* timeout in 0.2s */
     return true;
 }
 
@@ -76,36 +77,36 @@ bool rcio_status_probe(struct rcio_state *state)
 {
     int ret;
 
-    rcio = state;
+    status.rcio = state;
 
-    timeout = jiffies + HZ / 50; /* timeout in 0.02s */
+    status.timeout = jiffies + HZ / 50; /* timeout in 0.02s */
 
-    ret = sysfs_create_group(rcio->object, &attr_group);
+    ret = sysfs_create_group(status.rcio->object, &attr_group);
 
     if (ret < 0) {
         pr_err(KERN_INFO "[RCIO]: status module not registered int sysfs\n");
     }
 
-    init_ok = false;
+    status.init_ok = false;
 
     return true;
 }
 
-static void handle_status(uint16_t status)
+static void handle_status(uint16_t st)
 {
-    if (status & PX4IO_P_STATUS_FLAGS_INIT_OK) {
-        init_ok = true;
+    if (st & PX4IO_P_STATUS_FLAGS_INIT_OK) {
+        status.init_ok = true;
     } else {
-        init_ok = false;
+        status.init_ok = false;
     }
 }
 
 static void handle_alarms(uint16_t alarms)
 {
     if (alarms & PX4IO_P_STATUS_ALARMS_PWM_ERROR) {
-        pwm_ok = false;
+        status.pwm_ok = false;
     } else {
-        pwm_ok = true;
+        status.pwm_ok = true;
     }
 }
 
