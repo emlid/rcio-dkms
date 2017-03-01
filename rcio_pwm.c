@@ -57,7 +57,6 @@ static u16 default_frequency = 50;
 static bool default_frequency_updated = false;
 
 static bool armed = false;
-static bool enabled = false;
 unsigned long armtimeout;
 
 bool rcio_pwm_update(struct rcio_state *state)
@@ -76,7 +75,7 @@ bool rcio_pwm_update(struct rcio_state *state)
         default_frequency_updated = false;
     }
 
-    if (enabled && time_before(jiffies, armtimeout) && armtimeout > 0) {
+    if (time_before(jiffies, armtimeout) && armtimeout > 0) {
         armed = true;
     } else {
         armed = false;
@@ -175,14 +174,14 @@ static int rcio_pwm_create_sysfs_handle(void)
 
 static int rcio_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-    enabled = true;
+    armed = true;
 
     return 0;
 }
 
 static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-    enabled = false;
+    armed = false;
 }
 
 static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int duty_ns, int period_ns)
