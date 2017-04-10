@@ -8,9 +8,11 @@
 
 static void handle_status(uint16_t status);
 static void handle_alarms(uint16_t alarms);
+static bool rcio_status_request_crc(struct rcio_state *state);
 
 static struct rcio_status {
     unsigned long timeout;
+    unsigned long crc;
     bool init_ok;
     bool pwm_ok;
     bool alive;
@@ -34,15 +36,21 @@ static ssize_t alive_show(struct kobject *kobj, struct kobj_attribute *attr, cha
     return sprintf(buf, "%d\n", status.alive? 1: 0);
 }
 
-static struct kobj_attribute init_ok_attribute = __ATTR(status.init_ok, S_IRUGO, init_ok_show, NULL);
-static struct kobj_attribute pwm_ok_attribute = __ATTR(status.pwm_ok, S_IRUGO, pwm_ok_show, NULL);
-static struct kobj_attribute alive_attribute = __ATTR(status.alive, S_IRUGO, alive_show, NULL);
+static ssize_t crc_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "0x%x\n", status.crc);
+}
+
+static struct kobj_attribute init_ok_attribute = __ATTR(init_ok, S_IRUGO, init_ok_show, NULL);
+static struct kobj_attribute pwm_ok_attribute = __ATTR(pwm_ok, S_IRUGO, pwm_ok_show, NULL);
+static struct kobj_attribute alive_attribute = __ATTR(alive, S_IRUGO, alive_show, NULL);
+static struct kobj_attribute crc_attribute = __ATTR(crc, S_IRUGO, crc_show, NULL);
 
 static struct attribute *attrs[] = {
     &init_ok_attribute.attr,
     &pwm_ok_attribute.attr,
     &alive_attribute.attr,
-    NULL,
+    &crc_attribute.attr, NULL,
 };
 
 static struct attribute_group attr_group = {
@@ -72,7 +80,6 @@ bool rcio_status_update(struct rcio_state *state)
     return true;
 }
 
-
 bool rcio_status_probe(struct rcio_state *state)
 {
     int ret;
@@ -89,8 +96,24 @@ bool rcio_status_probe(struct rcio_state *state)
 
     status.init_ok = false;
 
+    if (!rcio_status_request_crc(state)) {
+        pr_err("[RCIO]: could not read CRC\n");
+    }
+
     return true;
 }
+
+static bool rcio_status_request_crc(struct rcio_state *state) {
+    uint16_t regs[2];
+
+    if (state->register_get(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_CRC, regs, ARRAY_SIZE(regs)) < 0) {
+        return false;
+    }
+
+    status.crc = regs[0] << 16 | regs[1];
+    return true;
+}
+
 
 static void handle_status(uint16_t st)
 {
