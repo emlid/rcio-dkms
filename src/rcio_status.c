@@ -119,7 +119,7 @@ static bool rcio_status_request_crc(struct rcio_state *state) {
         return false;
     }
 
-    status.crc = regs[0] << 16 | regs[1];
+    status.crc = regs[1] << 16 | regs[0];
     return true;
 }
 
