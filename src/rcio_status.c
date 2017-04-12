@@ -1,8 +1,15 @@
 #include <linux/delay.h>
 #include <linux/module.h>
+#define DEBUG
+#include <linux/device.h>
 
 #include "rcio.h"
 #include "protocol.h"
+
+#define rcio_status_err(__dev, format, args...)\
+        dev_err(__dev, "rcio_status: " format, ##args)
+#define rcio_status_warn(__dev, format, args...)\
+        dev_warn(__dev, "rcio_status: " format, ##args)
 
 #define RCIO_ADC_CHANNELS_COUNT 6
 
@@ -38,7 +45,7 @@ static ssize_t alive_show(struct kobject *kobj, struct kobj_attribute *attr, cha
 
 static ssize_t crc_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-    return sprintf(buf, "0x%x\n", status.crc);
+    return sprintf(buf, "0x%lx\n", status.crc);
 }
 
 static struct kobj_attribute init_ok_attribute = __ATTR(init_ok, S_IRUGO, init_ok_show, NULL);
@@ -91,13 +98,15 @@ bool rcio_status_probe(struct rcio_state *state)
     ret = sysfs_create_group(status.rcio->object, &attr_group);
 
     if (ret < 0) {
-        pr_err(KERN_INFO "[RCIO]: status module not registered int sysfs\n");
+        rcio_status_err(state->adapter->dev, "module not registered int sysfs\n");
     }
 
     status.init_ok = false;
 
     if (!rcio_status_request_crc(state)) {
-        pr_err("[RCIO]: could not read CRC\n");
+        rcio_status_err(state->adapter->dev, "could not read CRC\n");
+    } else {
+        rcio_status_warn(state->adapter->dev, "Firmware CRC: 0x%lx\n", status.crc);
     }
 
     return true;
