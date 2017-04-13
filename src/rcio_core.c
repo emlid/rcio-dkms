@@ -13,41 +13,6 @@
 #include "rcio_rcin.h"
 #include "rcio_status.h"
 
-static int connected;
-
-static ssize_t connected_show(struct kobject *kobj, struct kobj_attribute *attr,
-            char *buf)
-{
-    return sprintf(buf, "%d\n", connected);
-}
-
-static ssize_t connected_store(struct kobject *kobj, struct kobj_attribute *attr,
-             const char *buf, size_t count)
-{
-    int ret;
-
-    ret = kstrtoint(buf, 10, &connected);
-    if (ret < 0)
-        return ret;
-
-    return count;
-}
-
-static struct kobj_attribute connected_attribute =
-    __ATTR_RW(connected);
-
-
-static struct attribute *attrs[] = {
-    &connected_attribute.attr,
-    NULL,
-};
-
-static struct attribute_group attr_group = {
-    .attrs = attrs,
-};
-
-struct kobject *rcio_kobj;
-
 static int register_set(struct rcio_state *state, u8 page, u8 offset, const u16 *values, u8 num_values)
 {
     int ret;
@@ -128,18 +93,10 @@ int worker(void *data)
 
 static int rcio_init(struct rcio_adapter *adapter)
 {
-    int retval;
-
     rcio_state.object = kobject_create_and_add("rcio", kernel_kobj);
 
     if (rcio_state.object == NULL) {
         return -EINVAL;
-    }
-
-    retval = sysfs_create_group(rcio_state.object, &attr_group);
-
-    if (retval) {
-        goto errout_allocated;
     }
 
     rcio_state.adapter = adapter;
@@ -173,7 +130,6 @@ errout_status:
 errout_rcin:
 errout_pwm:
 errout_adc:
-errout_allocated:
     kobject_put(rcio_state.object);
     return -EIO;
 }
