@@ -128,6 +128,7 @@ static int rcio_init(struct rcio_adapter *adapter)
 
 errout_status:
 errout_rcin:
+    rcio_pwm_remove(&rcio_state);
 errout_pwm:
 errout_adc:
     kobject_put(rcio_state.object);
