@@ -96,7 +96,7 @@ static int register_modify(struct rcio_state *state, u8 page, u8 offset, u16 cle
     return register_set_byte(state, page, offset, value);
 }
 
-struct rcio_state rcio_state;
+static struct rcio_state rcio_state;
 
 struct task_struct *task;
 

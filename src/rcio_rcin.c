@@ -6,7 +6,7 @@
 
 #define RCIO_RCIN_MAX_CHANNELS 16
 
-struct rcio_state *rcio;
+static struct rcio_state *rcio;
 
 static int rcin_get_raw_values(struct rcio_state *state, struct rc_input_values *rc_val);
 
@@ -84,7 +84,7 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
-unsigned long timeout;
+static unsigned long timeout;
 
 bool rcio_rcin_update(struct rcio_state *state)
 {

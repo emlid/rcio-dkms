@@ -5,8 +5,8 @@
 #include "rcio.h"
 #include "protocol.h"
 
-struct rcio_state *rcio;
-struct rcio_pwm *pwm;
+static struct rcio_state *rcio;
+static struct rcio_pwm *pwm;
 
 struct pwm_output_rc_config {
     uint8_t channel;
@@ -57,7 +57,7 @@ static u16 default_frequency = 50;
 static bool default_frequency_updated = false;
 
 static bool armed = false;
-unsigned long armtimeout;
+static unsigned long armtimeout;
 
 bool rcio_pwm_update(struct rcio_state *state)
 {

@@ -6,7 +6,7 @@
 
 #define RCIO_ADC_CHANNELS_COUNT 6
 
-struct rcio_state *rcio;
+static struct rcio_state *rcio;
 
 static u16 measurements[RCIO_ADC_CHANNELS_COUNT];
 
@@ -60,7 +60,7 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
-unsigned long timeout;
+static unsigned long timeout;
 
 bool rcio_adc_update(struct rcio_state *state)
 {
