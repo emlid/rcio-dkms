@@ -5,9 +5,6 @@
 #include "rcio.h"
 #include "protocol.h"
 
-static struct rcio_state *rcio;
-static struct rcio_pwm *pwm;
-
 struct pwm_output_rc_config {
     uint8_t channel;
     uint16_t rc_min;
@@ -27,11 +24,13 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int du
 static int rcio_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm);
 static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm);
 
-static int rcio_pwm_create_sysfs_handle(void);
+static int rcio_pwm_create_sysfs_handle(struct rcio_state *state);
+
+struct rcio_pwm *pwm;
 
 struct rcio_pwm {
     struct pwm_chip chip;
-    struct rcio_state *rcio;
+    const struct pwm_ops *ops;
 };
 
 static const struct pwm_ops rcio_pwm_ops = {
@@ -93,12 +92,9 @@ static int rcio_pwm_safety_off(struct rcio_state *state)
     return state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FORCE_SAFETY_OFF, PX4IO_FORCE_SAFETY_MAGIC);
 }
 
-int rcio_pwm_probe(struct rcio_state *state)
+int rcio_hardware_init(struct rcio_state *state)
 {
-    int ret;
     uint16_t ratemap;
-
-    rcio = state;
 
     if (rcio_pwm_safety_off(state) < 0) {
         pr_err("SAFETY ON");
@@ -112,7 +108,7 @@ int rcio_pwm_probe(struct rcio_state *state)
         pr_err("ARMING OFF");
         return -ENOTCONN;
     }
-    
+
     ratemap = 0xff;
     if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_RATES, ratemap) < 0) {
         return -ENOTCONN;
@@ -121,24 +117,38 @@ int rcio_pwm_probe(struct rcio_state *state)
     if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_ALTRATE, alt_frequency) < 0) {
         pr_err("alt_frequency not set");
         return -ENOTCONN;
-    }   
+    }
 
     if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, default_frequency) < 0) {
         pr_err("default_frequency not set");
         return -ENOTCONN;
-    }   
-    
+    }
+
     if (pwm_set_initial_rc_config(state) < 0) {
         pr_err("Initial RC config not set");
         return -EINVAL;
     }
 
-    ret = rcio_pwm_create_sysfs_handle();
+    return 0;
+}
+
+int rcio_pwm_probe(struct rcio_state *state)
+{
+    int ret;
+
+    ret = rcio_pwm_create_sysfs_handle(state);
 
     if (ret < 0) {
         pr_warn("Generic PWM interface for RCIO not created\n");
         return ret;
     }
+
+    ret =  rcio_hardware_init(state);
+
+    if (ret != 0) {
+        return ret;
+    }
+
 
     return 0;
 }
@@ -152,12 +162,12 @@ int rcio_pwm_remove(struct rcio_state *state)
     if (ret < 0)
         return ret;
 
-    kfree(pwm);    
+    kfree(pwm);
 
     return 0;
 }
 
-static int rcio_pwm_create_sysfs_handle(void)
+static int rcio_pwm_create_sysfs_handle(struct rcio_state *state)
 {
     pwm = kzalloc(sizeof(struct rcio_pwm), GFP_KERNEL);
     
@@ -167,7 +177,7 @@ static int rcio_pwm_create_sysfs_handle(void)
     pwm->chip.ops = &rcio_pwm_ops;
     pwm->chip.npwm = RCIO_PWM_MAX_CHANNELS;
     pwm->chip.can_sleep = false;
-    pwm->chip.dev = rcio->adapter->dev;
+    pwm->chip.dev = state->adapter->dev;
 
     return pwmchip_add(&pwm->chip);
 }
@@ -186,11 +196,9 @@ static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 
 static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int duty_ns, int period_ns)
 {
-    struct rcio_pwm *handle;
     u16 duty_ms;
     u16 new_frequency;
 
-    handle = to_rcio_pwm(chip);
     armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
     new_frequency = 1000000000 / period_ns;
 
