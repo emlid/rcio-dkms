@@ -5,6 +5,8 @@
 #include "rcio.h"
 #include "protocol.h"
 
+#define PERIOD_MIN_NS 2040816
+
 struct pwm_output_rc_config {
     uint8_t channel;
     uint16_t rc_min;
@@ -194,7 +196,7 @@ static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
     armed = false;
 }
 
-static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int duty_ns, int period_ns)
+static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, int duty_ns, int period_ns)
 {
     u16 duty_ms;
     u16 new_frequency;
@@ -202,22 +204,22 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm, int du
     armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
     new_frequency = 1000000000 / period_ns;
 
-    if (pwm->hwpwm < 8) {
+    duty_ms = duty_ns / 1000;
+    values[channel->hwpwm] = duty_ms;
+
+    if (channel->hwpwm < 8) {
         if (new_frequency != alt_frequency && duty_ns != 0) {
             alt_frequency = new_frequency;
             alt_frequency_updated = true;
         }
     } else {
-        if (new_frequency != default_frequency) {
+        if (new_frequency != default_frequency && duty_ns != 0) {
             default_frequency = new_frequency;
             default_frequency_updated = true;
         }
     }
 
-    duty_ms = duty_ns / 1000;
-    values[pwm->hwpwm] = duty_ms;
-
-//    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u freq=%u\n", pwm->hwpwm, duty_ns, period_ns, duty_ms, alt_frequency);
+//    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u default_freq=%u, alt_freq=%u\n", channel->hwpwm, duty_ns, period_ns, duty_ms, default_frequency, alt_frequency);
 
     return 0;
 }
