@@ -274,7 +274,7 @@ static int pwm_set_initial_rc_config(struct rcio_state *state)
         if (pwm_set_initial_rc_channel_config(state, &config) < 0) {
             pr_err("RC config %d not set", channel);
         } else {
-            pr_debug("RC config %d set successfully", channel);
+            pr_warn("RC config %d set successfully", channel);
         }
 
     }
