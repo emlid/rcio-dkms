@@ -78,6 +78,10 @@ bool rcio_status_update(struct rcio_state *state)
         return false;
     }
 
+    if (!rcio_status_request_crc(state)) {
+        rcio_status_err(state->adapter->dev, "Could not update CRC\n");
+    } 
+
     status.alive = true;
 
     handle_status(regs[0]);
