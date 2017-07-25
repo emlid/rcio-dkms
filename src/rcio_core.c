@@ -13,6 +13,7 @@
 #include "rcio_rcin.h"
 #include "rcio_status.h"
 #include "rcio_safety.h"
+#include "rcio_gpio.h"
 
 static int register_set(struct rcio_state *state, u8 page, u8 offset, const u16 *values, u8 num_values)
 {
@@ -74,14 +75,19 @@ int worker(void *data)
     bool adc_updated = false;
     bool rcin_updated = false;
 
+    bool gpio_updated = false;
+
     while (!kthread_should_stop()) {
         pwm_updated = rcio_pwm_update(state);
         adc_updated = rcio_adc_update(state);
         rcin_updated = rcio_rcin_update(state);
+
+        gpio_updated = rcio_gpio_update(state);
+
         rcio_status_update(state);
         rcio_safety_update(state);
 
-        if (pwm_updated || adc_updated || rcin_updated) {
+        if (pwm_updated || adc_updated || rcin_updated || gpio_updated) {
             fail_counter = 0;
         } else {
             fail_counter++;
@@ -137,6 +143,10 @@ static int rcio_init(struct rcio_adapter *adapter)
         goto errout_safety;
     }
 
+    if (rcio_gpio_probe(&rcio_state) < 0) {
+        goto errout_gpio;
+    }
+
     task = kthread_run(&worker, (void *)&rcio_state,"rcio_worker");
 
     return 0;
@@ -145,6 +155,8 @@ errout_status:
 errout_safety:
 errout_rcin:
     rcio_pwm_remove(&rcio_state);
+errout_gpio:
+    rcio_gpio_remove(&rcio_state);
 errout_pwm:
 errout_adc:
     kobject_put(rcio_state.object);
@@ -177,6 +189,7 @@ int rcio_remove(struct rcio_adapter *adapter)
 
     mutex_destroy(&rcio_state.adapter->lock);
     ret = rcio_pwm_remove(&rcio_state);
+    ret = rcio_gpio_remove(&rcio_state);
 
     rcio_stop();
 

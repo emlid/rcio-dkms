@@ -296,6 +296,20 @@ enum {							/* DSM bind states */
 /* RCIO heartbeat page */
 #define PX4IO_PAGE_RCIO_HEARTBEAT  20
 
+/* GPIO page */
+#define PX4IO_PAGE_GPIO                     15                  /* page to store gpio */
+
+/* GPIO useful stuff */
+#define PX4IO_GPIO_SET_PIN_GPIO_ENABLE(x)  (x |= 1 << 15)
+#define PX4IO_GPIO_SET_PIN_GPIO_DISABLE(x) (x &= ~(1 << 15))
+
+#define PX4IO_GPIO_GET_PIN_GPIO_ENABLED(x) ((x >> 15) & 1)
+
+#define PX4IO_GPIO_SET_PIN_STATE_HIGH(x)   (x |= 1 << 0)
+#define PX4IO_GPIO_SET_PIN_STATE_LOW(x)    (x &= ~(1 << 0))
+
+#define PX4IO_GPIO_GET_PIN_STATE(x)        ((x >> 0) & 1)
+
 /**
  * As-needed mixer data upload.
  *
