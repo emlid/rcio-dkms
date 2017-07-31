@@ -296,8 +296,14 @@ enum {							/* DSM bind states */
 /* RCIO heartbeat page */
 #define PX4IO_PAGE_RCIO_HEARTBEAT  20
 
+/* PWM exported status on Raspberry Pi */
+#define PX4IO_PAGE_PWM_EXPORTED     8
+
 /* GPIO page */
 #define PX4IO_PAGE_GPIO                     15                  /* page to store gpio */
+
+/* GPIO exported status on Raspberry Pi */
+#define PX4IO_PAGE_GPIO_EXPORTED     16
 
 /* GPIO useful stuff */
 #define PX4IO_GPIO_SET_PIN_GPIO_ENABLE(x)  (x |= 1 << 15)

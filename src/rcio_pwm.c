@@ -7,8 +7,13 @@
 #include "protocol.h"
 #include "rcio_pwm.h"
 
+static struct rcio_state *rcio;
+static struct rcio_pwm *pwm;
 
-#define PERIOD_MIN_NS 2040816
+#define rcio_pwm_err(__dev, format, args...)\
+        dev_err(__dev, "rcio_pwm: " format, ##args)
+#define rcio_pwm_warn(__dev, format, args...)\
+        dev_warn(__dev, "rcio_pwm: " format, ##args)
 
 #define rcio_pwm_err(__dev, format, args...)\
         dev_err(__dev, "rcio_pwm: " format, ##args)
@@ -38,14 +43,11 @@ static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm);
 
 static int rcio_pwm_create_sysfs_handle(struct rcio_state *state);
 
-struct rcio_pwm *pwm;
-
 struct rcio_pwm {
     struct pwm_chip chip;
     const struct pwm_ops *ops;
 
     struct rcio_state *state;
-
 };
 
 static const struct pwm_ops rcio_pwm_ops = {
@@ -62,7 +64,6 @@ static inline struct rcio_pwm *to_rcio_pwm(struct pwm_chip *chip)
     return container_of(chip, struct rcio_pwm, chip);
 }
 
-#define RCIO_PWM_MAX_CHANNELS 16
 static u16 values[RCIO_PWM_MAX_CHANNELS] = {0};
 
 static u16 alt_frequency = 50;
@@ -270,7 +271,7 @@ int rcio_pwm_remove(struct rcio_state *state)
     if (ret < 0)
         return ret;
 
-    kfree(pwm);
+    kfree(pwm);    
 
     return 0;
 }
@@ -299,6 +300,7 @@ static int rcio_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 
 static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
+    //values[pwm->hwpwm] = 0;
     armed = false;
 }
 
@@ -403,10 +405,12 @@ int pwm_motors_running_count(struct rcio_state *state);
 
 static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, int duty_ns, int period_ns)
 {
+    struct rcio_pwm *handle;
     u16 duty_ms;
     u16 new_frequency;
     int pwm_group_number = 0;
 
+    handle = to_rcio_pwm(chip);
     armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
     new_frequency = 1000000000 / period_ns;
 
@@ -453,18 +457,63 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
 			values[channel->hwpwm] = 0;
 		}
     }
-
+    
     return 0;
 }
 
 static int rcio_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
-    return 0;
+    uint16_t pwm_exported, gpio_exported;
+    int read_result, write_result;
+    int pin_number;
+
+    int pwm_running = pwm_check_device_motors_running(rcio);
+    if (pwm_running < 0) return pwm_running;
+    else if (pwm_running > 0) {
+        //some of motors are running now. we are not allowed to change pin configuration now.
+        rcio_pwm_err(rcio->adapter->dev, "Exporting error: you have some of PWM outputs running. Stop them to change pin configuration.\n");
+        return -1;
+    }
+
+    pin_number = pwm_dev->hwpwm;
+
+    read_result = (rcio->register_get(rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
+    if (read_result < 0) return read_result;
+
+    if (gpio_exported & (1 << pin_number)) {
+        //this pin is already exported as pwm one
+        rcio_pwm_err(rcio->adapter->dev, "Exporting error: this pin [%d] is exported as GPIO\n", pin_number);
+        return -1;
+    } else {
+        //this pin is not stated, lets export it
+        read_result = (rcio->register_get(rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
+        pwm_exported |= (1 << pin_number);
+        write_result = (rcio->register_set(rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
+
+        if (write_result < 0) return write_result;
+
+        rcio_pwm_warn(rcio->adapter->dev, "Exporting pin [%d] OK\n", (int)pin_number);
+        return 0;
+    }
 }
 
 static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
-	return;
+    uint16_t pwm_exported;
+    int read_result, write_result;
+    int pin_number = pwm_dev->hwpwm;
+
+    rcio_pwm_warn(rcio->adapter->dev, "Unexporting pin [%d]\n", pin_number);
+
+    read_result = (rcio->register_get(rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
+    if (read_result < 0) return;
+
+    pwm_exported &= ~(1 << pin_number);
+    write_result = (rcio->register_set(rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
+
+    values[pin_number] = 0;
+
+    return;
 }
 
 static int pwm_set_initial_rc_channel_config(struct rcio_state *state, struct pwm_output_rc_config *config)
@@ -492,11 +541,11 @@ static int pwm_set_initial_rc_channel_config(struct rcio_state *state, struct pw
 
     return state->register_set(state, PX4IO_PAGE_RC_CONFIG, offset, regs, PX4IO_P_RC_CONFIG_STRIDE);
 }
-int pwm_motors_running_count(struct rcio_state *state) {
+int pwm_check_device_motors_running(struct rcio_state *state) {
     //checking if one of pwm channels duty cycles is not null right now on stm32
     uint16_t pwm_values[RCIO_PWM_MAX_CHANNELS];
     uint16_t spinning_count = 0;
-
+    
     //retrieving current pwm values
     int read_result = (state->register_get(state, PX4IO_PAGE_DIRECT_PWM, 0, pwm_values, RCIO_PWM_MAX_CHANNELS));
 
@@ -510,6 +559,7 @@ int pwm_motors_running_count(struct rcio_state *state) {
 
     return spinning_count;
 }
+
 static int pwm_set_initial_rc_config(struct rcio_state *state)
 {
     struct pwm_output_rc_config config = {
@@ -524,7 +574,7 @@ static int pwm_set_initial_rc_config(struct rcio_state *state)
         if (pwm_set_initial_rc_channel_config(state, &config) < 0) {
             pr_err("RC config %d not set", channel);
         } else {
-            pr_warn("RC config %d set successfully", channel);
+            pr_debug("RC config %d set successfully", channel);
         }
 
     }
