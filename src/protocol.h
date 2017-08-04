@@ -316,6 +316,15 @@ enum {							/* DSM bind states */
 
 #define PX4IO_GPIO_GET_PIN_STATE(x)        ((x >> 0) & 1)
 
+#define PX4IO_GPIO_SET_PIN_DIRECTION_INPUT(x)   (x |= 1 << 14)
+#define PX4IO_GPIO_SET_PIN_DIRECTION_OUTPUT(x)    (x &= ~(1 << 14))
+
+#define PX4IO_GPIO_GET_PIN_DIRECTION(x)        ((x >> 14) & 1)
+
+#define PX4IO_GPIO_PIN_DIRECTION_OUTPUT         0
+#define PX4IO_GPIO_PIN_DIRECTION_INPUT          1
+
+
 /**
  * As-needed mixer data upload.
  *

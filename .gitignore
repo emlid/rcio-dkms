@@ -5,6 +5,7 @@ Module.symvers
 *.mod.*
 *.o
 *.ko
+*.d
 modules.order
 *.dtb
 *.o.d
