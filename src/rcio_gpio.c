@@ -8,12 +8,15 @@
 #include "protocol.h"
 #include "rcio_pwm.h"
 
+#define GPIO_CHIP_OFFSET 500
+#define GPIO_PIN_OFFSET 0
+
 #define rcio_gpio_err(__dev, format, args...)\
         dev_err(__dev, "rcio_gpio: " format, ##args)
 #define rcio_gpio_warn(__dev, format, args...)\
         dev_warn(__dev, "rcio_gpio: " format, ##args)
 
-
+bool gpio_supported = false;
 
 static struct rcio_gpio {
     int counter;
@@ -31,15 +34,17 @@ static ssize_t status_show(struct kobject *kobj, struct kobj_attribute *attr, ch
 {
     int read_result;
     int not_null = 0;
-    uint16_t gpio_exported, pwm_exported;
+    uint16_t gpio_exported, pwm_exported, setup_features;
 
     //read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO, 0, gpio.pin_states, RCIO_PWM_MAX_CHANNELS));
     read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
     read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
 
-    not_null = pwm_check_device_motors_running(gpio.rcio);
+    read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FEATURES, &setup_features, 1));
 
-    return sprintf(buf, "pwm exported: 0x%x, gpio exported: 0x%x, pwm running: %d\n", pwm_exported, gpio_exported, not_null);
+    not_null = pwm_check_device_motors_running_count(gpio.rcio);
+
+    return sprintf(buf, "pwm exported: 0x%x, gpio exported: 0x%x, pwm running: %d.\nFeatures: 0x%x\n", pwm_exported, gpio_exported, not_null, setup_features);
 
 }
 
@@ -82,6 +87,7 @@ static struct attribute_group attr_group = {
 static int gpio_chip_get(struct gpio_chip *chip, unsigned offset) {
     uint16_t pin_state;
     int result = 0;
+    offset += GPIO_PIN_OFFSET;
     result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO, offset, &pin_state, 1));
     //rcio_gpio_warn(gpio.rcio->adapter->dev, "Pin [%d] is now 0x%x, result %d", offset, pin_state, result);
     return PX4IO_GPIO_GET_PIN_STATE(pin_state);
@@ -91,8 +97,8 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
     uint16_t pwm_exported, gpio_exported;
     int read_result, write_result;
     int pwm_running = 0;
-
-    pwm_running = pwm_check_device_motors_running(gpio.rcio);
+    offset += GPIO_PIN_OFFSET;
+    pwm_running = pwm_check_device_motors_running_count(gpio.rcio);
     if (pwm_running < 0) return pwm_running;
     else if (pwm_running > 0) {
         //some of motors are running now. we are not allowed to change pin configuration now.
@@ -126,11 +132,12 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
 static void gpio_chip_free(struct gpio_chip *chip, unsigned offset) {
     uint16_t gpio_exported;
     int read_result, write_result;
+    offset += GPIO_PIN_OFFSET;
     rcio_gpio_warn(gpio.rcio->adapter->dev, "Unexporting pin [%d]\n", offset);
 
     read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
     if (read_result <= 0) {
-        rcio_gpio_err(gpio.rcio->adapter->dev, "Error on register_get\n", read_result);
+        rcio_gpio_err(gpio.rcio->adapter->dev, "Error on register_get %d\n", read_result);
         return;
     }
 
@@ -149,6 +156,7 @@ static void gpio_chip_free(struct gpio_chip *chip, unsigned offset) {
 
 static void gpio_chip_set(struct gpio_chip *chip, unsigned offset, int value) {
     //rcio_gpio_warn(gpio.rcio->adapter->dev, "Setting pin [%d] to value %d\n", offset, value);
+    offset += GPIO_PIN_OFFSET;
     PX4IO_GPIO_SET_PIN_GPIO_ENABLE(gpio.pin_states[offset]);
     if (value == 0) {
         PX4IO_GPIO_SET_PIN_STATE_LOW(gpio.pin_states[offset]);
@@ -161,16 +169,19 @@ static void gpio_chip_set(struct gpio_chip *chip, unsigned offset, int value) {
 
 //returns direction for signal "offset", 0=out, 1=in
 static int gpio_get_direction(struct gpio_chip *chip, unsigned offset) {
+    offset += GPIO_PIN_OFFSET;
     rcio_gpio_warn(gpio.rcio->adapter->dev, "get_direction on %d\n", offset);
     return PX4IO_GPIO_GET_PIN_DIRECTION(gpio.pin_states[offset]);
 }
 static int gpio_direction_input(struct gpio_chip *chip, unsigned offset) {
+    offset += GPIO_PIN_OFFSET;
     rcio_gpio_warn(gpio.rcio->adapter->dev, "direction_input on %d\n", offset);
     PX4IO_GPIO_SET_PIN_DIRECTION_INPUT(gpio.pin_states[offset]);
     rcio_gpio_force_update(gpio.rcio);
     return 0;
 }
 static int gpio_direction_output(struct gpio_chip *chip, unsigned offset, int value) {
+    offset += GPIO_PIN_OFFSET;
     rcio_gpio_warn(gpio.rcio->adapter->dev, "direction_output on %d value %d\n", offset, value);
     PX4IO_GPIO_SET_PIN_DIRECTION_OUTPUT(gpio.pin_states[offset]);
     rcio_gpio_force_update(gpio.rcio);
@@ -186,8 +197,8 @@ static struct gpio_chip gpiochip = {
     .request = gpio_chip_request,
     .free = gpio_chip_free,
     .label = "Navio PWM pins as GPIO",
-    .base = 500,
-    .ngpio = RCIO_PWM_MAX_CHANNELS,
+    .base = GPIO_CHIP_OFFSET + GPIO_PIN_OFFSET,
+    .ngpio = RCIO_PWM_MAX_CHANNELS - GPIO_PIN_OFFSET,
 };
 
 bool rcio_gpio_force_update(struct rcio_state *state) {
@@ -199,6 +210,8 @@ bool rcio_gpio_force_update(struct rcio_state *state) {
 bool rcio_gpio_update(struct rcio_state *state)
 {
     int result = 1;
+    if (!gpio_supported) return true;
+
     if (gpio.pin_states_updated > 0) {
         gpio.pin_states_updated--;
         rcio_gpio_update(state);
@@ -206,9 +219,21 @@ bool rcio_gpio_update(struct rcio_state *state)
     return result;
 }
 
-bool rcio_gpio_probe(struct rcio_state *state)
+int rcio_gpio_probe(struct rcio_state *state)
 {
     int ret = 0;
+    uint16_t setup_features;
+
+    ret = (state->register_get(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FEATURES, &setup_features, 1));
+    if (!(setup_features & PX4IO_P_SETUP_FEATURES_GPIO)) {
+        rcio_gpio_err(state->adapter->dev, "GPIO is not supported on this firmware\n");
+        gpio_supported = false;
+        return -EOPNOTSUPP;
+    } else {
+        rcio_gpio_warn(state->adapter->dev, "GPIO is supported on this firmware\n");
+        gpio_supported = true;
+    }
+
     gpio.rcio = state;
     ret = sysfs_create_group(gpio.rcio->object, &attr_group);
 
@@ -225,7 +250,7 @@ bool rcio_gpio_probe(struct rcio_state *state)
         rcio_gpio_err(state->adapter->dev, "error while adding gpiochip\n");
         return false;
     } else {
-        rcio_gpio_warn(state->adapter->dev, "gpiochip added successfully under gpio500\n");
+        rcio_gpio_warn(state->adapter->dev, "gpiochip added successfully under gpio%d\n", gpiochip.base);
     }
 
     gpio.led_value = 0;
@@ -239,6 +264,7 @@ bool rcio_gpio_probe(struct rcio_state *state)
 int rcio_gpio_remove(struct rcio_state *state) {
 
     int ret = 1;
+    if (!gpio_supported) return 1;
 
     gpiochip_remove(&gpiochip);
 

@@ -10,6 +10,6 @@
 int rcio_pwm_probe(struct rcio_state* state);
 bool rcio_pwm_update(struct rcio_state *state);
 int rcio_pwm_remove(struct rcio_state *state);
-int pwm_check_device_motors_running(struct rcio_state *state);
+int pwm_check_device_motors_running_count(struct rcio_state *state);
 
 #endif

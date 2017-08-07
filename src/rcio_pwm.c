@@ -7,8 +7,7 @@
 #include "protocol.h"
 #include "rcio_pwm.h"
 
-static struct rcio_state *rcio;
-static struct rcio_pwm *pwm;
+#define PERIOD_MIN_NS 2040816
 
 #define rcio_pwm_err(__dev, format, args...)\
         dev_err(__dev, "rcio_pwm: " format, ##args)
@@ -22,6 +21,8 @@ static struct rcio_pwm *pwm;
 
 bool adv_timer_config_supported;
 
+extern bool gpio_supported;
+
 struct pwm_output_rc_config {
     uint8_t channel;
     uint16_t rc_min;
@@ -31,6 +32,8 @@ struct pwm_output_rc_config {
     uint16_t rc_assignment;
     bool     rc_reverse;
 };
+
+struct rcio_pwm *pwm;
 
 static int rcio_pwm_safety_off(struct rcio_state *state);
 static int pwm_set_initial_rc_config(struct rcio_state *state);
@@ -43,10 +46,10 @@ static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm);
 
 static int rcio_pwm_create_sysfs_handle(struct rcio_state *state);
 
+
 struct rcio_pwm {
     struct pwm_chip chip;
     const struct pwm_ops *ops;
-
     struct rcio_state *state;
 };
 
@@ -78,6 +81,7 @@ static bool frequencies_update_required[RCIO_PWM_TIMER_COUNT] = {0};
 
 static bool armed = false;
 static unsigned long armtimeout;
+
 
 static int print_freqs_countdown = 3;
 
@@ -118,7 +122,6 @@ static void rcio_pwm_update_frequency(struct rcio_state *state, freq_update_stag
 
     default:
         return;
-
     }
 }
 
@@ -195,8 +198,8 @@ int rcio_hardware_init(struct rcio_state *state)
         return -ENOTCONN;
     }
 
-    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_ARMING, 
-                PX4IO_P_SETUP_ARMING_IO_ARM_OK | 
+    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_ARMING,
+                PX4IO_P_SETUP_ARMING_IO_ARM_OK |
                 PX4IO_P_SETUP_ARMING_FMU_ARMED |
                 PX4IO_P_SETUP_ARMING_ALWAYS_PWM_ENABLE) < 0) {
         pr_err("ARMING OFF");
@@ -226,7 +229,6 @@ int rcio_hardware_init(struct rcio_state *state)
             return -ENOTCONN;
         }
     }
-
 
     if (pwm_set_initial_rc_config(state) < 0) {
         pr_err("Initial RC config not set");
@@ -259,6 +261,8 @@ int rcio_pwm_probe(struct rcio_state *state)
 
     ret =  rcio_hardware_init(state);
 
+    rcio_pwm_warn(pwm->chip.dev, "PWM probe success\n");
+    
     return ret;
 }
 
@@ -271,7 +275,7 @@ int rcio_pwm_remove(struct rcio_state *state)
     if (ret < 0)
         return ret;
 
-    kfree(pwm);    
+    kfree(pwm);
 
     return 0;
 }
@@ -279,7 +283,7 @@ int rcio_pwm_remove(struct rcio_state *state)
 static int rcio_pwm_create_sysfs_handle(struct rcio_state *state)
 {
     pwm = kzalloc(sizeof(struct rcio_pwm), GFP_KERNEL);
-    
+
     if (!pwm)
         return -ENOMEM;
 
@@ -287,6 +291,7 @@ static int rcio_pwm_create_sysfs_handle(struct rcio_state *state)
     pwm->chip.npwm = state->pwm_channels_count;
     pwm->chip.can_sleep = false;
     pwm->chip.dev = state->adapter->dev;
+    pwm->state = state;
 
     return pwmchip_add(&pwm->chip);
 }
@@ -300,7 +305,7 @@ static int rcio_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 
 static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-    //values[pwm->hwpwm] = 0;
+    values[pwm->hwpwm] = 0;
     armed = false;
 }
 
@@ -401,19 +406,15 @@ static bool rcio_pwm_should_change_duty_old_way(struct pwm_chip *chip, struct pw
 	return false;
 }
 
-int pwm_motors_running_count(struct rcio_state *state);
-
 static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, int duty_ns, int period_ns)
 {
-    struct rcio_pwm *handle;
     u16 duty_ms;
     u16 new_frequency;
     int pwm_group_number = 0;
 
-    handle = to_rcio_pwm(chip);
     armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
     new_frequency = 1000000000 / period_ns;
-
+    
     if (adv_timer_config_supported) {
         //new way
 
@@ -457,42 +458,43 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
 			values[channel->hwpwm] = 0;
 		}
     }
-    
     return 0;
 }
 
 static int rcio_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
     uint16_t pwm_exported, gpio_exported;
-    int read_result, write_result;
+    int ret;
     int pin_number;
 
-    int pwm_running = pwm_check_device_motors_running(rcio);
+    int pwm_running = pwm_check_device_motors_running_count(pwm->state);
     if (pwm_running < 0) return pwm_running;
     else if (pwm_running > 0) {
         //some of motors are running now. we are not allowed to change pin configuration now.
-        rcio_pwm_err(rcio->adapter->dev, "Exporting error: you have some of PWM outputs running. Stop them to change pin configuration.\n");
+        rcio_pwm_err(pwm->state->adapter->dev, "Exporting error: you have some of PWM outputs running. Stop them to change pin configuration.\n");
         return -1;
     }
-
     pin_number = pwm_dev->hwpwm;
+    //if fw does not support gpio, it does not support pwm_exported page, so skip it
+    if (!gpio_supported) return 0;
 
-    read_result = (rcio->register_get(rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
-    if (read_result < 0) return read_result;
+    ret = (pwm->state->register_get(pwm->state, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
+    if (ret < 0) return ret;
 
     if (gpio_exported & (1 << pin_number)) {
         //this pin is already exported as pwm one
-        rcio_pwm_err(rcio->adapter->dev, "Exporting error: this pin [%d] is exported as GPIO\n", pin_number);
-        return -1;
+        rcio_pwm_err(pwm->state->adapter->dev, "Exporting error: this pin [%d] is exported as GPIO\n", pin_number);
+        return -EPERM;
     } else {
         //this pin is not stated, lets export it
-        read_result = (rcio->register_get(rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
+        ret = (pwm->state->register_get(pwm->state, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
         pwm_exported |= (1 << pin_number);
-        write_result = (rcio->register_set(rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
+        ret = (pwm->state->register_set(pwm->state, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
 
-        if (write_result < 0) return write_result;
+        if (ret < 0) return ret;
 
-        rcio_pwm_warn(rcio->adapter->dev, "Exporting pin [%d] OK\n", (int)pin_number);
+        rcio_pwm_warn(pwm->state->adapter->dev, "Exporting pin [%d] OK\n", (int)pin_number);
+
         return 0;
     }
 }
@@ -503,15 +505,18 @@ static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm_dev)
     int read_result, write_result;
     int pin_number = pwm_dev->hwpwm;
 
-    rcio_pwm_warn(rcio->adapter->dev, "Unexporting pin [%d]\n", pin_number);
+    values[pin_number] = 0;
 
-    read_result = (rcio->register_get(rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
+    //if fw does not support gpio, it does not support pwm_exported page, so skip it
+    if (!gpio_supported) return;
+
+    //rcio_pwm_warn(pwm->state->adapter->dev, "Unexporting pin [%d]\n", pin_number);
+
+    read_result = (pwm->state->register_get(pwm->state, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
     if (read_result < 0) return;
 
     pwm_exported &= ~(1 << pin_number);
-    write_result = (rcio->register_set(rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
-
-    values[pin_number] = 0;
+    write_result = (pwm->state->register_set(pwm->state, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
 
     return;
 }
@@ -541,7 +546,8 @@ static int pwm_set_initial_rc_channel_config(struct rcio_state *state, struct pw
 
     return state->register_set(state, PX4IO_PAGE_RC_CONFIG, offset, regs, PX4IO_P_RC_CONFIG_STRIDE);
 }
-int pwm_check_device_motors_running(struct rcio_state *state) {
+
+int pwm_check_device_motors_running_count(struct rcio_state *state) {
     //checking if one of pwm channels duty cycles is not null right now on stm32
     uint16_t pwm_values[RCIO_PWM_MAX_CHANNELS];
     uint16_t spinning_count = 0;
@@ -574,7 +580,7 @@ static int pwm_set_initial_rc_config(struct rcio_state *state)
         if (pwm_set_initial_rc_channel_config(state, &config) < 0) {
             pr_err("RC config %d not set", channel);
         } else {
-            pr_debug("RC config %d set successfully", channel);
+            pr_warn("RC config %d set successfully", channel);
         }
 
     }

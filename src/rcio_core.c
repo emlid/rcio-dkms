@@ -101,6 +101,8 @@ int worker(void *data)
 
 static int rcio_init(struct rcio_adapter *adapter)
 {
+    int gpio_probe_result;
+
     rcio_state.object = kobject_create_and_add("rcio", kernel_kobj);
 
     if (rcio_state.object == NULL) {
@@ -143,7 +145,9 @@ static int rcio_init(struct rcio_adapter *adapter)
         goto errout_safety;
     }
 
-    if (rcio_gpio_probe(&rcio_state) < 0) {
+    gpio_probe_result = rcio_gpio_probe(&rcio_state);
+
+    if ((gpio_probe_result < 0) && (gpio_probe_result != -EOPNOTSUPP)) {
         goto errout_gpio;
     }
 

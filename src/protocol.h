@@ -180,6 +180,7 @@
 #define PX4IO_P_SETUP_FEATURES_SBUS2_OUT	(1 << 1) /**< enable S.Bus v2 output */
 #define PX4IO_P_SETUP_FEATURES_PWM_RSSI		(1 << 2) /**< enable PWM RSSI parsing */
 #define PX4IO_P_SETUP_FEATURES_ADC_RSSI		(1 << 3) /**< enable ADC RSSI parsing */
+#define PX4IO_P_SETUP_FEATURES_GPIO     	(1 << 4) /**< enable GPIO support on PWM pins */
 
 #define PX4IO_P_SETUP_FEATURES_ADV_FREQ_CONFIG (1 << 5) /**< enable advanced frequency configuration */
 
