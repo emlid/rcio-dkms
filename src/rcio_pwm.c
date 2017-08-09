@@ -1,11 +1,21 @@
 #include <linux/module.h>
 #include <linux/pwm.h>
+#include <linux/device.h>
 #include <linux/slab.h>
 
 #include "rcio.h"
 #include "protocol.h"
+#include "rcio_pwm.h"
+
 
 #define PERIOD_MIN_NS 2040816
+
+#define rcio_pwm_err(__dev, format, args...)\
+        dev_err(__dev, "rcio_pwm: " format, ##args)
+#define rcio_pwm_warn(__dev, format, args...)\
+        dev_warn(__dev, "rcio_pwm: " format, ##args)
+
+bool adv_timer_config_supported;
 
 struct pwm_output_rc_config {
     uint8_t channel;
@@ -33,6 +43,9 @@ struct rcio_pwm *pwm;
 struct rcio_pwm {
     struct pwm_chip chip;
     const struct pwm_ops *ops;
+
+    struct rcio_state *state;
+
 };
 
 static const struct pwm_ops rcio_pwm_ops = {
@@ -57,23 +70,61 @@ static bool alt_frequency_updated = false;
 static u16 default_frequency = 50;
 static bool default_frequency_updated = false;
 
+static u16 frequencies[RCIO_PWM_TIMER_COUNT] = {50, 50, 50, 50};
+static u16 new_frequencies[RCIO_PWM_TIMER_COUNT] = {50, 50, 50, 50};
+static bool frequencies_update_required[RCIO_PWM_TIMER_COUNT] = {0};
+
+
 static bool armed = false;
 static unsigned long armtimeout;
 
-bool rcio_pwm_update(struct rcio_state *state)
-{
-    if (alt_frequency_updated) {
+
+typedef enum {
+    SET_GRP1 = 0, SET_GRP2, SET_GRP3, SET_GRP4, SET_ALT, SET_DEF, CLEAR
+} freq_update_stage_t;
+
+static bool freq_update_noticed = false;
+static void rcio_pwm_update_frequency(struct rcio_state *state, freq_update_stage_t stage) {
+    uint16_t clear_values[RCIO_PWM_MAX_CHANNELS];
+    switch (stage) {
+    case CLEAR:
+       for (int i = 0; i < RCIO_PWM_MAX_CHANNELS; i++) clear_values[i] = 0;
+       state->register_set(state, PX4IO_PAGE_DIRECT_PWM, 0, clear_values, RCIO_PWM_MAX_CHANNELS);
+       return;
+
+    case SET_ALT:
         if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_ALTRATE, alt_frequency) < 0) {
             printk(KERN_INFO "alt_frequency not set\n");
         }
         alt_frequency_updated = false;
-    }
+		return;
 
-    if (default_frequency_updated) {
+    case SET_DEF:
         if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, default_frequency) < 0) {
             printk(KERN_INFO "default_frequency not set\n");
         }
         default_frequency_updated = false;
+        return;
+
+        //gcc and clang support this
+    case SET_GRP1 ... SET_GRP4:
+        state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_GROUP1_RATE + stage, new_frequencies[stage]);
+        rcio_pwm_warn(pwm->chip.dev, "updated freq on grp %d to %d\n", stage, new_frequencies[stage]);
+        frequencies[stage] = new_frequencies[stage];
+
+        return;
+
+    default:
+        return;
+
+    }
+}
+
+bool rcio_pwm_update(struct rcio_state *state)
+{
+    bool some_freq_updated = alt_frequency_updated || default_frequency_updated;
+    for (int i = 0; i < RCIO_PWM_TIMER_COUNT; i++) {
+        some_freq_updated = some_freq_updated || frequencies_update_required[i];
     }
 
     if (time_before(jiffies, armtimeout) && armtimeout > 0) {
@@ -83,6 +134,44 @@ bool rcio_pwm_update(struct rcio_state *state)
     }
 
     if (armed) {
+        if (some_freq_updated && (!freq_update_noticed)) {
+            //we detected frequency updates, so we have to change them
+            //but first we should clear up values on the device
+            //not to have this pwm broken
+            rcio_pwm_update_frequency(state, CLEAR);
+            freq_update_noticed = true;
+            return true;
+        }
+
+        if (adv_timer_config_supported) {
+            //new way
+            for (int i = 0; i < RCIO_PWM_TIMER_COUNT; i++) {
+                if (frequencies_update_required[i]) {
+                    rcio_pwm_update_frequency(state, i);
+                    frequencies_update_required[i] = false;
+                    return true;
+                }
+            }
+
+        } else {
+            //old way for backwards-compatibility
+            if (alt_frequency_updated) {
+                rcio_pwm_update_frequency(state, SET_ALT);
+                alt_frequency_updated = false;
+                return true;
+            }
+
+            if (default_frequency_updated) {
+                rcio_pwm_update_frequency(state, SET_DEF);
+                default_frequency_updated = false;
+                return true;
+            }
+        }
+
+    }
+
+    freq_update_noticed = false;
+    if (armed && (!some_freq_updated )) {
         return state->register_set(state, PX4IO_PAGE_DIRECT_PWM, 0, values, RCIO_PWM_MAX_CHANNELS);
     }
 
@@ -111,20 +200,30 @@ int rcio_hardware_init(struct rcio_state *state)
         return -ENOTCONN;
     }
 
-    ratemap = 0xff;
-    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_RATES, ratemap) < 0) {
-        return -ENOTCONN;
+    if (adv_timer_config_supported) {
+        //new-way
+        for (int i = 0; i < RCIO_PWM_TIMER_COUNT; i++) {
+            rcio_pwm_update_frequency(state, i);
+        }
+
+    } else {
+        //old-way for some backwards compatibility
+        ratemap = 0xff;
+        if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_RATES, ratemap) < 0) {
+            return -ENOTCONN;
+        }
+
+        if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_ALTRATE, alt_frequency) < 0) {
+            pr_err("alt_frequency not set");
+            return -ENOTCONN;
+        }
+
+        if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, default_frequency) < 0) {
+            pr_err("default_frequency not set");
+            return -ENOTCONN;
+        }
     }
 
-    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_ALTRATE, alt_frequency) < 0) {
-        pr_err("alt_frequency not set");
-        return -ENOTCONN;
-    }
-
-    if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, default_frequency) < 0) {
-        pr_err("default_frequency not set");
-        return -ENOTCONN;
-    }
 
     if (pwm_set_initial_rc_config(state) < 0) {
         pr_err("Initial RC config not set");
@@ -137,6 +236,7 @@ int rcio_hardware_init(struct rcio_state *state)
 int rcio_pwm_probe(struct rcio_state *state)
 {
     int ret;
+    uint16_t setup_features;
 
     ret = rcio_pwm_create_sysfs_handle(state);
 
@@ -151,6 +251,16 @@ int rcio_pwm_probe(struct rcio_state *state)
         return ret;
     }
 
+    ret = (state->register_get(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FEATURES, &setup_features, 1));
+    if (!(setup_features & PX4IO_P_SETUP_FEATURES_ADV_FREQ_CONFIG)) {
+        rcio_pwm_err(state->adapter->dev, "Advanced frequency configuration is not supported on this firmware\n");
+        adv_timer_config_supported = false;
+    } else {
+        rcio_pwm_warn(state->adapter->dev, "Advanced frequency configuration is supported on this firmware\n");
+        adv_timer_config_supported = true;
+    }
+
+    ret =  rcio_hardware_init(state);
 
     return 0;
 }
@@ -196,10 +306,60 @@ static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
     armed = false;
 }
 
+#define inside_range(x, lower, upper) ((x >= lower) && (x <= upper))
+
+static bool rcio_pwm_is_freq_change_safe(struct pwm_chip *chip, struct pwm_device *channel, int pwm_group_number, u16 new_frequency) {
+    int control_pin = pwm_group_number * 4;
+    bool motors_are_stopped = true;
+
+    if (frequencies[pwm_group_number] == new_frequency) {
+        //no changes at all
+        return false;
+    }
+
+    if (new_frequency == frequencies[control_pin]) {
+        //this group already has the same frequency.
+        //new frequency does not differ from the control one. change nothing.
+        //otherwise ardupilot is mad and pwm goes crazy.
+        return false;
+    }
+
+    if (channel->hwpwm == control_pin) {
+        //this is a control pin, we can apply changes
+        return true;
+    }
+
+    //if the new requested frequency is not the one
+    //that the control pin has, the user is wrong
+    //let's check first if all that pwm values are zero
+    //if they are, this operation is PROBABLY safe.
+
+    for (int i = control_pin; i < control_pin + RCIO_PWM_CHANNELS_PER_TIMER; i++) {
+        if (values[i] != 0) {
+            motors_are_stopped = false;
+        }
+    }
+
+    //we depend on motors running here
+    if (motors_are_stopped) {
+        printk_ratelimited(KERN_WARNING "Only frequency changes on pins 0, 4, 8 and 12 count. However, we will change the frequency by now, since the motors are stopped.");
+        return true;
+    } else {
+        printk_ratelimited(KERN_ERR "Only frequency changes on pins 0, 4, 8 and 12 count. \
+This error could occur if you put a servo and a motor on the same pwm group. \
+For additional information please refer to the documentation.");
+        return false;
+    }
+
+}
+
+int pwm_motors_running_count(struct rcio_state *state);
+
 static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, int duty_ns, int period_ns)
 {
     u16 duty_ms;
     u16 new_frequency;
+    int pwm_group_number = 0;
 
     armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
     new_frequency = 1000000000 / period_ns;
@@ -207,31 +367,54 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
     duty_ms = duty_ns / 1000;
     values[channel->hwpwm] = duty_ms;
 
-    if (channel->hwpwm < 8) {
-        if (new_frequency != alt_frequency && duty_ns != 0) {
-            alt_frequency = new_frequency;
-            alt_frequency_updated = true;
+    if (adv_timer_config_supported) {
+        //new way
+
+        if (inside_range(channel->hwpwm, 0, 3)) pwm_group_number = 0;
+        if (inside_range(channel->hwpwm, 4, 7)) pwm_group_number = 1;
+        if (inside_range(channel->hwpwm, 8, 11)) pwm_group_number = 2;
+        if (inside_range(channel->hwpwm, 12, 15)) pwm_group_number = 3;
+
+        if (rcio_pwm_is_freq_change_safe(chip, channel, pwm_group_number, new_frequency)) {
+            new_frequencies[pwm_group_number] = new_frequency;
+            rcio_pwm_warn(pwm->chip.dev, "requested update on %d to %d", pwm_group_number, new_frequency);
+            frequencies_update_required[pwm_group_number] = true;
+            duty_ms = duty_ns / 1000;
+            values[channel->hwpwm] = duty_ms;
+
         }
     } else {
-        if (new_frequency != default_frequency && duty_ns != 0) {
-            default_frequency = new_frequency;
-            default_frequency_updated = true;
+        //old way
+
+        if (channel->hwpwm < 8) {
+            if (new_frequency != alt_frequency && duty_ns != 0) {
+                alt_frequency = new_frequency;
+                alt_frequency_updated = true;
+            }
+        } else {
+            if (new_frequency != default_frequency && duty_ns != 0) {
+                default_frequency = new_frequency;
+                default_frequency_updated = true;
+            }
         }
+
+        duty_ms = duty_ns / 1000;
+        values[channel->hwpwm] = duty_ms;
+
     }
 
-//    printk(KERN_INFO "hwpwm=%d duty=%d period=%d duty_ms=%u default_freq=%u, alt_freq=%u\n", channel->hwpwm, duty_ns, period_ns, duty_ms, default_frequency, alt_frequency);
-
+    //if (pwm->hwpwm == 0) rcio_pwm_warn(pwm->chip.dev, "hwpwm=%d duty=%d period=%d duty_ms=%u default_freq=%u, alt_freq=%u\n", channel->hwpwm, duty_ns, period_ns, duty_ms, default_frequency, alt_frequency);
     return 0;
 }
 
-static int rcio_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm)
+static int rcio_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
     return 0;
 }
 
-static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm)
+static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
-
+	return;
 }
 
 static int pwm_set_initial_rc_channel_config(struct rcio_state *state, struct pwm_output_rc_config *config)
@@ -259,7 +442,24 @@ static int pwm_set_initial_rc_channel_config(struct rcio_state *state, struct pw
 
     return state->register_set(state, PX4IO_PAGE_RC_CONFIG, offset, regs, PX4IO_P_RC_CONFIG_STRIDE);
 }
+int pwm_motors_running_count(struct rcio_state *state) {
+    //checking if one of pwm channels duty cycles is not null right now on stm32
+    uint16_t pwm_values[RCIO_PWM_MAX_CHANNELS];
+    uint16_t spinning_count = 0;
 
+    //retrieving current pwm values
+    int read_result = (state->register_get(state, PX4IO_PAGE_DIRECT_PWM, 0, pwm_values, RCIO_PWM_MAX_CHANNELS));
+
+    if (read_result < 0) {
+        return read_result;
+    }
+    //counting ones that are not zero
+    for (int i = 0; i < RCIO_PWM_MAX_CHANNELS; i++) {
+        if (pwm_values[i] != 0) spinning_count++;
+    }
+
+    return spinning_count;
+}
 static int pwm_set_initial_rc_config(struct rcio_state *state)
 {
     struct pwm_output_rc_config config = {

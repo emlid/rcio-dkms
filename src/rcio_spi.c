@@ -40,6 +40,7 @@ static int rcio_spi_write(struct rcio_adapter *state, u16 address, const char *d
 
     if (count > PKT_MAX_REGS)
         return -EINVAL;
+    mutex_lock(&state->lock);
 
     buffer->count_code = count | PKT_CODE_WRITE;
     buffer->page = page;
@@ -67,6 +68,8 @@ static int rcio_spi_write(struct rcio_adapter *state, u16 address, const char *d
 
     if (result == 0)
         result = count;
+        
+    mutex_unlock(&state->lock);
 
     return result;
 }
@@ -81,6 +84,8 @@ static int rcio_spi_read(struct rcio_adapter *state, u16 address, char *data, si
 
     if (count > PKT_MAX_REGS)
         return -EINVAL;
+
+    mutex_lock(&state->lock);
 
     buffer->count_code = count | PKT_CODE_READ;
     buffer->page = page;
@@ -120,7 +125,7 @@ static int rcio_spi_read(struct rcio_adapter *state, u16 address, char *data, si
 
     if (result == 0)
         result = count;
-
+    mutex_unlock(&state->lock);
     return result;
 }
 
@@ -167,7 +172,6 @@ static int rcio_spi_remove(struct spi_device *spi)
     }
 
     kfree(buffer);
-
     return ret;
 }
 

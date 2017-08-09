@@ -179,6 +179,8 @@
 #define PX4IO_P_SETUP_FEATURES_PWM_RSSI		(1 << 2) /**< enable PWM RSSI parsing */
 #define PX4IO_P_SETUP_FEATURES_ADC_RSSI		(1 << 3) /**< enable ADC RSSI parsing */
 
+#define PX4IO_P_SETUP_FEATURES_ADV_FREQ_CONFIG (1 << 5) /**< enable advanced frequency configuration */
+
 #define PX4IO_P_SETUP_ARMING			1	 /* arming controls */
 #define PX4IO_P_SETUP_ARMING_IO_ARM_OK		(1 << 0) /* OK to arm the IO side */
 #define PX4IO_P_SETUP_ARMING_FMU_ARMED		(1 << 1) /* FMU is already armed */
@@ -231,6 +233,11 @@ enum {							/* DSM bind states */
 
 #define PX4IO_P_SETUP_FORCE_SAFETY_ON		14	/* force safety switch into 'disarmed' (PWM disabled state) */
 #define PX4IO_FORCE_SAFETY_MAGIC		22027	/* required argument for force safety (random) */
+
+#define PX4IO_P_SETUP_PWM_GROUP1_RATE 26   /* for pin groups */
+#define PX4IO_P_SETUP_PWM_GROUP2_RATE 27
+#define PX4IO_P_SETUP_PWM_GROUP3_RATE 28
+#define PX4IO_P_SETUP_PWM_GROUP4_RATE 29
 
 /* autopilot control values, -10000..10000 */
 #define PX4IO_PAGE_CONTROLS			51	/**< actuator control groups, one after the other, 8 wide */

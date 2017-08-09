@@ -105,6 +105,8 @@ static int rcio_init(struct rcio_adapter *adapter)
     rcio_state.register_get_byte = register_get_byte;
     rcio_state.register_set_byte = register_set_byte;
     rcio_state.register_modify = register_modify;
+    mutex_init(&rcio_state.adapter->lock);
+
 
     if (rcio_adc_probe(&rcio_state) < 0) {
         goto errout_adc;
@@ -159,6 +161,7 @@ int rcio_remove(struct rcio_adapter *adapter)
 
     kthread_stop(task);
 
+    mutex_destroy(&rcio_state.adapter->lock);
     ret = rcio_pwm_remove(&rcio_state);
 
     rcio_stop();
