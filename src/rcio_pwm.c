@@ -23,6 +23,10 @@ bool adv_timer_config_supported;
 
 extern bool gpio_supported;
 
+extern uint16_t pwm_ignore_writings_mask;
+
+bool adv_timer_config_supported;
+
 struct pwm_output_rc_config {
     uint8_t channel;
     uint16_t rc_min;
@@ -51,6 +55,7 @@ struct rcio_pwm {
     struct pwm_chip chip;
     const struct pwm_ops *ops;
     struct rcio_state *state;
+
 };
 
 static const struct pwm_ops rcio_pwm_ops = {
@@ -406,11 +411,20 @@ static bool rcio_pwm_should_change_duty_old_way(struct pwm_chip *chip, struct pw
 	return false;
 }
 
+static bool is_pwm_ignored(int channel) {
+    return ((pwm_ignore_writings_mask) >> channel) & 0x01;
+}
+
 static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, int duty_ns, int period_ns)
 {
     u16 duty_ms;
     u16 new_frequency;
     int pwm_group_number = 0;
+
+    if (pwm_ignore_writings_mask && is_pwm_ignored(channel->hwpwm)) {
+        rcio_pwm_err(pwm->chip.dev, "pin %d is ignored", channel->hwpwm);
+        return 0;
+    }
 
     armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
     new_frequency = 1000000000 / period_ns;
@@ -449,7 +463,7 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
 				default_frequency_updated = true;
 			}
         }
-        	
+	
 		if (rcio_pwm_should_change_duty_old_way(chip, channel, new_frequency)) {
 			duty_ms = duty_ns / 1000;
 			values[channel->hwpwm] = duty_ms;       
@@ -468,18 +482,31 @@ static int rcio_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm_dev)
     int pin_number;
 
     int pwm_running = pwm_check_device_motors_running_count(pwm->state);
-    if (pwm_running < 0) return pwm_running;
-    else if (pwm_running > 0) {
+    pin_number = pwm_dev->hwpwm;
+
+    if (pwm_ignore_writings_mask && is_pwm_ignored(pin_number)) {
+        rcio_pwm_err(pwm->state->adapter->dev, "Ignoring pin %d.\n", pin_number);
+        return 0;
+    }
+
+    if (pwm_running < 0) {
+        //we've got some error. let's passthrough it
+        return pwm_running;
+    } else if (pwm_running > 0) {
+
         //some of motors are running now. we are not allowed to change pin configuration now.
         rcio_pwm_err(pwm->state->adapter->dev, "Exporting error: you have some of PWM outputs running. Stop them to change pin configuration.\n");
-        return -1;
+        return -EPERM;
     }
     pin_number = pwm_dev->hwpwm;
     //if fw does not support gpio, it does not support pwm_exported page, so skip it
     if (!gpio_supported) return 0;
 
-    ret = (pwm->state->register_get(pwm->state, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
-    if (ret < 0) return ret;
+    ret = pwm->state->register_get(pwm->state, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
+    if (ret < 0) {
+        //passthrough an error of being unable to read gpio exported register
+        return ret;
+    }
 
     if (gpio_exported & (1 << pin_number)) {
         //this pin is already exported as pwm one
@@ -504,8 +531,12 @@ static void rcio_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm_dev)
     uint16_t pwm_exported;
     int read_result, write_result;
     int pin_number = pwm_dev->hwpwm;
-
     values[pin_number] = 0;
+
+    if (pwm_ignore_writings_mask && is_pwm_ignored(pin_number)) {
+        rcio_pwm_err(pwm->state->adapter->dev, "Ignoring pin %d.\n", pin_number);
+        return;
+    }
 
     //if fw does not support gpio, it does not support pwm_exported page, so skip it
     if (!gpio_supported) return;
@@ -551,7 +582,7 @@ int pwm_check_device_motors_running_count(struct rcio_state *state) {
     //checking if one of pwm channels duty cycles is not null right now on stm32
     uint16_t pwm_values[RCIO_PWM_MAX_CHANNELS];
     uint16_t spinning_count = 0;
-    
+
     //retrieving current pwm values
     int read_result = (state->register_get(state, PX4IO_PAGE_DIRECT_PWM, 0, pwm_values, RCIO_PWM_MAX_CHANNELS));
 

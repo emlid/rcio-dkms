@@ -1,12 +1,13 @@
 #include <linux/module.h>
 #include <linux/slab.h>
-#define DEBUG
 #include <linux/device.h>
 #include <linux/gpio/driver.h>
 #include <linux/delay.h>
 #include "rcio.h"
 #include "protocol.h"
 #include "rcio_pwm.h"
+
+//#define DEBUG
 
 #define GPIO_CHIP_OFFSET 500
 #define GPIO_PIN_OFFSET 0
@@ -18,9 +19,10 @@
 
 bool gpio_supported = false;
 
+uint16_t pwm_ignore_writings_mask = 0;
+
 static struct rcio_gpio {
     int counter;
-    int led_value;
     int pin_states_updated;
     uint16_t pin_states[RCIO_PWM_MAX_CHANNELS];
     struct rcio_state *rcio;
@@ -33,19 +35,15 @@ bool rcio_gpio_force_update(struct rcio_state *state);
 static ssize_t status_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
     int read_result;
-    int not_null = 0;
+    int motors_running_count = 0;
     uint16_t gpio_exported, pwm_exported, setup_features;
 
-    //read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO, 0, gpio.pin_states, RCIO_PWM_MAX_CHANNELS));
-    read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
-    read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
+    read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1);
+    read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
+    read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FEATURES, &setup_features, 1);
 
-    read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FEATURES, &setup_features, 1));
-
-    not_null = pwm_check_device_motors_running_count(gpio.rcio);
-
-    return sprintf(buf, "pwm exported: 0x%x, gpio exported: 0x%x, pwm running: %d.\nFeatures: 0x%x\n", pwm_exported, gpio_exported, not_null, setup_features);
-
+    motors_running_count = pwm_check_device_motors_running_count(gpio.rcio);
+    return sprintf(buf, "pwm exported: 0x%x, gpio exported: 0x%x, pwm running: %d.\nFeatures: 0x%x\n", pwm_exported, gpio_exported, motors_running_count, setup_features);
 }
 
 static ssize_t reset_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
@@ -58,25 +56,51 @@ static ssize_t reset_store(struct kobject *kobj, struct kobj_attribute *attr, co
     uint16_t gpio_exported = 0;
 
     //putting all gpios to low
-    for (int i = 0; i < RCIO_PWM_MAX_CHANNELS; i++)
-        if (PX4IO_GPIO_GET_PIN_GPIO_ENABLED(gpio.pin_states[i])) PX4IO_GPIO_SET_PIN_STATE_LOW(gpio.pin_states[i]);
-    result = (gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO, 0, &(gpio.pin_states[0]), RCIO_PWM_MAX_CHANNELS));
+    for (int i = 0; i < RCIO_PWM_MAX_CHANNELS; i++) {
+        if (PX4IO_GPIO_GET_PIN_GPIO_ENABLED(gpio.pin_states[i])) {
+            PX4IO_GPIO_SET_PIN_STATE_LOW(gpio.pin_states[i]);
+        }
+    }
+    result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO, 0, &(gpio.pin_states[0]), RCIO_PWM_MAX_CHANNELS);
 
     //clearing them
     for (int i = 0; i < RCIO_PWM_MAX_CHANNELS; i++) gpio.pin_states[i] = 0;
 
-    result = (gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
+    result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
 
     rcio_gpio_warn(gpio.rcio->adapter->dev, "All GPIO pins cleared\n");
 
     return count;
 }
 
-static struct kobj_attribute status_attribute = __ATTR(status, S_IRUGO, status_show, NULL);
-static struct kobj_attribute reset_attribute = __ATTR(reset, (S_IWUSR | S_IRUGO), reset_show, reset_store);
+static ssize_t pwmignore_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "0x%x\nThis is the mask where each bit shows whether pwm writings to this channel will be ignored\n", pwm_ignore_writings_mask);
+}
+
+#define inside_range(x, y, z) ((x >= y) && (x <= z))
+static ssize_t pwmignore_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+    uint16_t  max_mask = (uint16_t)((1U << RCIO_PWM_MAX_CHANNELS) - 1U);
+    long ignore_mask = 0;
+    int result = kstrtol(buf, 16, &ignore_mask);
+
+    if ((result == 0) && inside_range(ignore_mask, 0, max_mask)) {
+        rcio_gpio_warn(gpio.rcio->adapter->dev, "Now pins under 0x%x will be ignored for PWM\n", (uint16_t)ignore_mask);
+        pwm_ignore_writings_mask= ignore_mask;
+    } else {
+        rcio_gpio_err(gpio.rcio->adapter->dev, "Invalid value for pwmignore, this should be from 0x0000 to 0x%x\n", max_mask);
+        return -EINVAL;
+    }
+    return count;
+}
+
+static struct kobj_attribute status_attribute = __ATTR_RO(status);
+static struct kobj_attribute reset_attribute = __ATTR_RW(reset);
+static struct kobj_attribute pwmignore_attribute = __ATTR_RW(pwmignore);
 
 static struct attribute *attrs[] = {
-    &status_attribute.attr, &reset_attribute.attr, NULL,
+    &status_attribute.attr, &reset_attribute.attr, &pwmignore_attribute.attr, NULL,
 };
 
 static struct attribute_group attr_group = {
@@ -88,8 +112,10 @@ static int gpio_chip_get(struct gpio_chip *chip, unsigned offset) {
     uint16_t pin_state;
     int result = 0;
     offset += GPIO_PIN_OFFSET;
-    result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO, offset, &pin_state, 1));
-    //rcio_gpio_warn(gpio.rcio->adapter->dev, "Pin [%d] is now 0x%x, result %d", offset, pin_state, result);
+    result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO, offset, &pin_state, 1);
+#ifdef DEBUG
+    rcio_gpio_warn(gpio.rcio->adapter->dev, "Pin [%d] is now 0x%x, result %d", offset, pin_state, result);
+#endif
     return PX4IO_GPIO_GET_PIN_STATE(pin_state);
 }
 
@@ -98,26 +124,29 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
     int read_result, write_result;
     int pwm_running = 0;
     offset += GPIO_PIN_OFFSET;
+    
     pwm_running = pwm_check_device_motors_running_count(gpio.rcio);
-    if (pwm_running < 0) return pwm_running;
-    else if (pwm_running > 0) {
+
+    if (pwm_running < 0) {
+        return pwm_running;
+    } else if (pwm_running > 0) {
         //some of motors are running now. we are not allowed to change pin configuration now.
         rcio_gpio_err(gpio.rcio->adapter->dev, "Exporting error: you have some of PWM outputs running. Stop them to change pin configuration.\n");
-        return -1;
+        return -EPERM;
     }
 
-    read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1));
+    read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1);
     if (read_result < 0) return read_result;
 
     if (pwm_exported & (1 << offset)) {
         //this pin is already exported as pwm one
         rcio_gpio_err(gpio.rcio->adapter->dev, "Exporting error: this pin [%d] is exported as PWM\n", offset);
-        return -1;
+        return -EPERM;
     } else {
-        //this pin is not stated, lets export it
-        read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
+        //this pin is not exported as pwm, lets export it as gpio
+        read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
         gpio_exported |= (1 << offset);
-        write_result = (gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
+        write_result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
 
         if (write_result < 0) return write_result;
 
@@ -125,7 +154,7 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
         gpio.pin_states_updated++;
 
         rcio_gpio_warn(gpio.rcio->adapter->dev, "Exporting pin [%d] OK\n", (int)offset);
-        return 1;
+        return 0;
     }
 }
 
@@ -135,13 +164,14 @@ static void gpio_chip_free(struct gpio_chip *chip, unsigned offset) {
     offset += GPIO_PIN_OFFSET;
     rcio_gpio_warn(gpio.rcio->adapter->dev, "Unexporting pin [%d]\n", offset);
 
-    read_result = (gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
+    read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
     if (read_result <= 0) {
         rcio_gpio_err(gpio.rcio->adapter->dev, "Error on register_get %d\n", read_result);
         return;
     }
 
 
+    //setting the pin value to zero - gpio value is 0, not exported to everything
     gpio.pin_states[offset] = 0;
     rcio_gpio_force_update(gpio.rcio);
 
@@ -150,12 +180,13 @@ static void gpio_chip_free(struct gpio_chip *chip, unsigned offset) {
 
     if (write_result <= 0) {
         rcio_gpio_err(gpio.rcio->adapter->dev, "Error on register_set %d\n", read_result);
-        return;
     }
 }
 
 static void gpio_chip_set(struct gpio_chip *chip, unsigned offset, int value) {
-    //rcio_gpio_warn(gpio.rcio->adapter->dev, "Setting pin [%d] to value %d\n", offset, value);
+#ifdef DEBUG
+    rcio_gpio_warn(gpio.rcio->adapter->dev, "Setting pin [%d] to value %d\n", offset, value);
+#endif
     offset += GPIO_PIN_OFFSET;
     PX4IO_GPIO_SET_PIN_GPIO_ENABLE(gpio.pin_states[offset]);
     if (value == 0) {
@@ -202,9 +233,12 @@ static struct gpio_chip gpiochip = {
 };
 
 bool rcio_gpio_force_update(struct rcio_state *state) {
-    uint16_t result = (gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO, 0, &(gpio.pin_states[0]), RCIO_PWM_MAX_CHANNELS));
-    //rcio_gpio_warn(gpio.rcio->adapter->dev, "Updating done.");
-    return result;
+    uint16_t result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO, 0, &(gpio.pin_states[0]), RCIO_PWM_MAX_CHANNELS);
+#ifdef DEBUG
+    rcio_gpio_warn(gpio.rcio->adapter->dev, "Updating done.");
+#endif
+    return (result >= 0);
+
 }
 
 bool rcio_gpio_update(struct rcio_state *state)
@@ -214,9 +248,9 @@ bool rcio_gpio_update(struct rcio_state *state)
 
     if (gpio.pin_states_updated > 0) {
         gpio.pin_states_updated--;
-        rcio_gpio_update(state);
+        result = rcio_gpio_update(state);
     }
-    return result;
+    return (result >= 0);
 }
 
 int rcio_gpio_probe(struct rcio_state *state)
@@ -253,7 +287,6 @@ int rcio_gpio_probe(struct rcio_state *state)
         rcio_gpio_warn(state->adapter->dev, "gpiochip added successfully under gpio%d\n", gpiochip.base);
     }
 
-    gpio.led_value = 0;
     memset(gpio.pin_states, 0, sizeof(gpio.pin_states));
     gpio.pin_states_updated = 1;
 
