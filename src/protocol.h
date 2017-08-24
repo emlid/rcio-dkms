@@ -293,6 +293,9 @@ enum {							/* DSM bind states */
 /* PWM disarmed values that are active, even when SAFETY_SAFE */
 #define PX4IO_PAGE_DISARMED_PWM		108			/* 0..CONFIG_ACTUATOR_COUNT-1 */
 
+/* RCIO heartbeat page */
+#define PX4IO_PAGE_RCIO_HEARTBEAT  20
+
 /**
  * As-needed mixer data upload.
  *

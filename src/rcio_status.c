@@ -34,9 +34,17 @@ static struct rcio_status {
     bool pwm_ok;
     bool alive;
     struct rcio_state *rcio;
+    uint16_t heartbeat;
 } status;
 
 bool rcio_status_update(struct rcio_state *state);
+
+static int rcio_status_do_heartbeat(struct rcio_state *state) {
+    int result = state->register_set(state, PX4IO_PAGE_RCIO_HEARTBEAT, 0, &status.heartbeat, 1);
+    status.heartbeat++;
+    if (status.heartbeat > 0xFF) status.heartbeat = 0;
+    return result;
+}
 
 static ssize_t init_ok_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -99,6 +107,10 @@ bool rcio_status_update(struct rcio_state *state)
         rcio_status_err(state->adapter->dev, "Could not update CRC\n");
     } 
 
+    if (!rcio_status_do_heartbeat(state)) {
+        rcio_status_err(state->adapter->dev, "Could not do heartbeat\n");
+    }
+
     status.alive = true;
 
     handle_status(regs[0]);
@@ -135,6 +147,8 @@ bool rcio_status_probe(struct rcio_state *state)
     } else {
         rcio_status_warn(state->adapter->dev, "Board type: 0x%x (%s)\n", (int)status.rcio->board_type, board_names[status.rcio->board_type]);
     }
+
+    status.heartbeat = 0;
 
     return true;
 }
