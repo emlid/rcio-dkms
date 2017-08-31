@@ -306,12 +306,10 @@ static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
     armed = false;
 }
 
-#undef DEFAULT_RATELIMIT_INTERVAL
-#undef DEFAULT_RATELIMIT_BURST
-
-#define DEFAULT_RATELIMIT_INTERVAL (60 * HZ)
-#define DEFAULT_RATELIMIT_BURST 1
+static int print_freqs_countdown = 3;
 static void print_freqs_error(void) {
+	if (print_freqs_countdown < 0) return;
+	print_freqs_countdown--;
 	printk_ratelimited(KERN_ERR "Please note that only frequency changes on pins 0, 4, 8 and 12 count. \
 This error could occur if you put a servo and a motor on the same pwm group. \
 For additional information please refer to the documentation.");
