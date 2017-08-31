@@ -306,9 +306,20 @@ static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
     armed = false;
 }
 
+#undef DEFAULT_RATELIMIT_INTERVAL
+#undef DEFAULT_RATELIMIT_BURST
+
+#define DEFAULT_RATELIMIT_INTERVAL (60 * HZ)
+#define DEFAULT_RATELIMIT_BURST 1
+static void print_freqs_error(void) {
+	printk_ratelimited(KERN_ERR "Please note that only frequency changes on pins 0, 4, 8 and 12 count. \
+This error could occur if you put a servo and a motor on the same pwm group. \
+For additional information please refer to the documentation.");
+}
+
 #define inside_range(x, lower, upper) ((x >= lower) && (x <= upper))
 
-static bool rcio_pwm_is_freq_change_safe(struct pwm_chip *chip, struct pwm_device *channel, int pwm_group_number, u16 new_frequency) {
+static bool rcio_pwm_should_change_freq_new_way(struct pwm_chip *chip, struct pwm_device *channel, int pwm_group_number, u16 new_frequency) {
     int control_pin = pwm_group_number * 4;
     bool motors_are_stopped = true;
 
@@ -345,12 +356,36 @@ static bool rcio_pwm_is_freq_change_safe(struct pwm_chip *chip, struct pwm_devic
         printk_ratelimited(KERN_WARNING "Only frequency changes on pins 0, 4, 8 and 12 count. However, we will change the frequency by now, since the motors are stopped.");
         return true;
     } else {
-        printk_ratelimited(KERN_ERR "Only frequency changes on pins 0, 4, 8 and 12 count. \
-This error could occur if you put a servo and a motor on the same pwm group. \
-For additional information please refer to the documentation.");
+        print_freqs_error();
         return false;
     }
+}
 
+static bool rcio_pwm_should_change_freq_old_way(struct pwm_chip *chip, struct pwm_device *channel, u16 new_frequency, int duty_ns) {
+	if (channel->hwpwm < 8) {
+		if (new_frequency != alt_frequency && duty_ns != 0) {
+			if ((channel->hwpwm == 0) || (channel->hwpwm == 4)) {
+				//pin from control group
+				return true;
+			} else {
+				//pin not from control group
+				print_freqs_error();
+				return false;
+			}
+		}
+	} else {
+		if (new_frequency != default_frequency && duty_ns != 0) {
+			if ((channel->hwpwm == 8) || (channel->hwpwm == 12)) {
+				//pin from control group
+				return true;
+			} else {
+				//pin not from control group
+				print_freqs_error();
+				return false;
+			}
+		}
+	}
+	return false;
 }
 
 int pwm_motors_running_count(struct rcio_state *state);
@@ -375,7 +410,7 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
         if (inside_range(channel->hwpwm, 8, 11)) pwm_group_number = 2;
         if (inside_range(channel->hwpwm, 12, 15)) pwm_group_number = 3;
 
-        if (rcio_pwm_is_freq_change_safe(chip, channel, pwm_group_number, new_frequency)) {
+        if (rcio_pwm_should_change_freq_new_way(chip, channel, pwm_group_number, new_frequency)) {
             new_frequencies[pwm_group_number] = new_frequency;
             rcio_pwm_warn(pwm->chip.dev, "requested update on %d to %d", pwm_group_number, new_frequency);
             frequencies_update_required[pwm_group_number] = true;
@@ -386,24 +421,20 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
     } else {
         //old way
 
-        if (channel->hwpwm < 8) {
-            if (new_frequency != alt_frequency && duty_ns != 0) {
-                alt_frequency = new_frequency;
-                alt_frequency_updated = true;
-            }
-        } else {
-            if (new_frequency != default_frequency && duty_ns != 0) {
-                default_frequency = new_frequency;
-                default_frequency_updated = true;
-            }
+		if (rcio_pwm_should_change_freq_old_way(chip, channel, new_frequency, duty_ns)) {
+			if (channel->hwpwm < 8) {
+				alt_frequency = new_frequency;
+				alt_frequency_updated = true;
+			} else {
+				default_frequency = new_frequency;
+				default_frequency_updated = true;
+			}
+			
+			duty_ms = duty_ns / 1000;
+			values[channel->hwpwm] = duty_ms;
         }
-
-        duty_ms = duty_ns / 1000;
-        values[channel->hwpwm] = duty_ms;
-
     }
 
-    //if (pwm->hwpwm == 0) rcio_pwm_warn(pwm->chip.dev, "hwpwm=%d duty=%d period=%d duty_ms=%u default_freq=%u, alt_freq=%u\n", channel->hwpwm, duty_ns, period_ns, duty_ms, default_frequency, alt_frequency);
     return 0;
 }
 
