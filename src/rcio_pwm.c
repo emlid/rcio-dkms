@@ -321,13 +321,6 @@ static bool rcio_pwm_should_change_freq_new_way(struct pwm_chip *chip, struct pw
         return false;
     }
 
-    if (new_frequency == frequencies[control_pin]) {
-        //this group already has the same frequency.
-        //new frequency does not differ from the control one. change nothing.
-        //otherwise ardupilot is mad and pwm goes crazy.
-        return false;
-    }
-
     if (channel->hwpwm == control_pin) {
         //this is a control pin, we can apply changes
         return true;
@@ -381,6 +374,29 @@ static bool rcio_pwm_should_change_freq_old_way(struct pwm_chip *chip, struct pw
 	return false;
 }
 
+static bool rcio_pwm_should_change_duty_new_way(struct pwm_chip *chip, struct pwm_device *channel, int pwm_group_number, u16 new_frequency) {
+	if (frequencies[pwm_group_number] == new_frequency) {
+        //there is no difference in frequency, which is fine and safe
+        return true;
+    }
+    /* there is difference in frequency
+       which should have been fixed but is not, 
+       so there is a configuration error.
+       we should not feed the motors with wrong duty cycles */
+    return false;
+}
+
+static bool rcio_pwm_should_change_duty_old_way(struct pwm_chip *chip, struct pwm_device *channel, u16 new_frequency) {
+	if ((channel->hwpwm < 8) && (new_frequency == alt_frequency)) {
+		return true;		
+	}
+	if ((channel->hwpwm >= 8) && (new_frequency == default_frequency)) {
+		return true;		
+	}
+	/* again the same logic as in _change_duty_new_way */
+	return false;
+}
+
 int pwm_motors_running_count(struct rcio_state *state);
 
 static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, int duty_ns, int period_ns)
@@ -391,9 +407,6 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
 
     armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
     new_frequency = 1000000000 / period_ns;
-
-    duty_ms = duty_ns / 1000;
-    values[channel->hwpwm] = duty_ms;
 
     if (adv_timer_config_supported) {
         //new way
@@ -406,11 +419,17 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
         if (rcio_pwm_should_change_freq_new_way(chip, channel, pwm_group_number, new_frequency)) {
             new_frequencies[pwm_group_number] = new_frequency;
             rcio_pwm_warn(pwm->chip.dev, "requested update on %d to %d", pwm_group_number, new_frequency);
-            frequencies_update_required[pwm_group_number] = true;
-            duty_ms = duty_ns / 1000;
-            values[channel->hwpwm] = duty_ms;
-            
+            frequencies_update_required[pwm_group_number] = true;     
         }
+        
+        if (rcio_pwm_should_change_duty_new_way(chip, channel, pwm_group_number, new_frequency)) {
+			duty_ms = duty_ns / 1000;
+            values[channel->hwpwm] = duty_ms;       
+        } else {
+			//change is not safe, better to force duty to zero
+			values[channel->hwpwm] = 0;
+        }
+        
     } else {
         //old way
 
@@ -422,10 +441,15 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
 				default_frequency = new_frequency;
 				default_frequency_updated = true;
 			}
-			
-			duty_ms = duty_ns / 1000;
-			values[channel->hwpwm] = duty_ms;
         }
+        	
+		if (rcio_pwm_should_change_duty_old_way(chip, channel, new_frequency)) {
+			duty_ms = duty_ns / 1000;
+			values[channel->hwpwm] = duty_ms;       
+		} else {
+			//change is not safe, better to force duty to zero
+			values[channel->hwpwm] = 0;
+		}
     }
 
     return 0;
