@@ -78,6 +78,7 @@ static bool frequencies_update_required[RCIO_PWM_TIMER_COUNT] = {0};
 static bool armed = false;
 static unsigned long armtimeout;
 
+static int print_freqs_countdown = 3;
 
 typedef enum {
     SET_GRP1 = 0, SET_GRP2, SET_GRP3, SET_GRP4, SET_ALT, SET_DEF, CLEAR
@@ -131,6 +132,7 @@ bool rcio_pwm_update(struct rcio_state *state)
         armed = true;
     } else {
         armed = false;
+        print_freqs_countdown = 3;
     }
 
     if (armed) {
@@ -306,7 +308,6 @@ static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
     armed = false;
 }
 
-static int print_freqs_countdown = 3;
 static void print_freqs_error(void) {
 	if (print_freqs_countdown < 0) return;
 	print_freqs_countdown--;
@@ -414,7 +415,7 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
             frequencies_update_required[pwm_group_number] = true;
             duty_ms = duty_ns / 1000;
             values[channel->hwpwm] = duty_ms;
-
+            
         }
     } else {
         //old way
