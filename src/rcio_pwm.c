@@ -247,12 +247,6 @@ int rcio_pwm_probe(struct rcio_state *state)
         return ret;
     }
 
-    ret =  rcio_hardware_init(state);
-
-    if (ret != 0) {
-        return ret;
-    }
-
     ret = (state->register_get(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FEATURES, &setup_features, 1));
     if (!(setup_features & PX4IO_P_SETUP_FEATURES_ADV_FREQ_CONFIG)) {
         rcio_pwm_err(state->adapter->dev, "Advanced frequency configuration is not supported on this firmware\n");
@@ -264,7 +258,7 @@ int rcio_pwm_probe(struct rcio_state *state)
 
     ret =  rcio_hardware_init(state);
 
-    return 0;
+    return ret;
 }
 
 int rcio_pwm_remove(struct rcio_state *state)
