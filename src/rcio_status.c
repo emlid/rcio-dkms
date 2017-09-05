@@ -16,6 +16,26 @@
 static void handle_status(uint16_t status);
 static void handle_alarms(uint16_t alarms);
 static bool rcio_status_request_crc(struct rcio_state *state);
+static bool rcio_status_request_board_type(struct rcio_state *state);
+
+typedef enum
+{
+	NAVIO2 = 0x0,
+	EDGE = 0x01,
+	NEW_BOARD1  = 0x02,
+	NEW_BOARD2 = 0x03,
+	UNKNOWN_BOARD = 0x04
+
+} board_type_t;
+
+char *board_names[] =
+{
+	[NAVIO2] = "navio2",
+	[EDGE] = "edge",
+	[NEW_BOARD1] = "new_board1",
+	[NEW_BOARD2] = "new_board2",
+	[UNKNOWN_BOARD] = "unknown board",
+};
 
 static struct rcio_status {
     unsigned long timeout;
@@ -23,6 +43,7 @@ static struct rcio_status {
     bool init_ok;
     bool pwm_ok;
     bool alive;
+    board_type_t board_type;
     struct rcio_state *rcio;
 } status;
 
@@ -48,16 +69,23 @@ static ssize_t crc_show(struct kobject *kobj, struct kobj_attribute *attr, char 
     return sprintf(buf, "0x%lx\n", status.crc);
 }
 
+static ssize_t board_name_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%s\n", board_names[status.board_type]);
+}
+
 static struct kobj_attribute init_ok_attribute = __ATTR(init_ok, S_IRUGO, init_ok_show, NULL);
 static struct kobj_attribute pwm_ok_attribute = __ATTR(pwm_ok, S_IRUGO, pwm_ok_show, NULL);
 static struct kobj_attribute alive_attribute = __ATTR(alive, S_IRUGO, alive_show, NULL);
 static struct kobj_attribute crc_attribute = __ATTR(crc, S_IRUGO, crc_show, NULL);
+static struct kobj_attribute board_name_attribute = __ATTR(board_name, S_IRUGO, board_name_show, NULL);
 
 static struct attribute *attrs[] = {
     &init_ok_attribute.attr,
     &pwm_ok_attribute.attr,
     &alive_attribute.attr,
-    &crc_attribute.attr, NULL,
+    &crc_attribute.attr, 
+    &board_name_attribute.attr,NULL,
 };
 
 static struct attribute_group attr_group = {
@@ -112,6 +140,12 @@ bool rcio_status_probe(struct rcio_state *state)
     } else {
         rcio_status_warn(state->adapter->dev, "Firmware CRC: 0x%lx\n", status.crc);
     }
+    
+	if (!rcio_status_request_board_type(state)) {
+        rcio_status_err(state->adapter->dev, "Could not read board type\n");
+    } else {
+        rcio_status_warn(state->adapter->dev, "Board type: 0x%x (%s)\n", (int)status.board_type, board_names[status.board_type]);
+    }
 
     return true;
 }
@@ -124,6 +158,17 @@ static bool rcio_status_request_crc(struct rcio_state *state) {
     }
 
     status.crc = regs[1] << 16 | regs[0];
+    return true;
+}
+
+static bool rcio_status_request_board_type(struct rcio_state *state) {
+    uint16_t reg;
+
+    if (state->register_get(state, PX4IO_PAGE_STATUS, PX4IO_P_STATUS_BOARD_TYPE, &reg, 1) < 0) {
+        return false;
+    }
+    
+    status.board_type = reg;
     return true;
 }
 

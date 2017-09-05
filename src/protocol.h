@@ -137,6 +137,8 @@
 #define PX4IO_P_STATUS_MIXER_UPPER_LIMIT 		(1 << 1) /**< at least one actuator output has reached upper limit */
 #define PX4IO_P_STATUS_MIXER_YAW_LIMIT 			(1 << 2) /**< yaw control is limited because it causes output clipping */
 
+#define PX4IO_P_STATUS_BOARD_TYPE		10	 /* navio or edge or smth else */
+
 /* array of post-mix actuator outputs, -10000..10000 */
 #define PX4IO_PAGE_ACTUATORS		2		/* 0..CONFIG_ACTUATOR_COUNT-1 */
 
