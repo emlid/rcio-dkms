@@ -31,6 +31,9 @@ static struct rcio_gpio {
 bool rcio_gpio_update(struct rcio_state *state);
 bool rcio_gpio_force_update(struct rcio_state *state);
 
+#define update_required (gpio.pin_states_updated > 0)
+#define update_dequeue  gpio.pin_states_updated--
+#define update_enqueue    gpio.pin_states_updated++
 
 static ssize_t status_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -151,7 +154,7 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
         if (write_result < 0) return write_result;
 
         PX4IO_GPIO_SET_PIN_GPIO_ENABLE(gpio.pin_states[offset]);
-        gpio.pin_states_updated++;
+        update_enqueue;
 
         rcio_gpio_warn(gpio.rcio->adapter->dev, "Exporting pin [%d] OK\n", (int)offset);
         return 0;
@@ -246,8 +249,8 @@ bool rcio_gpio_update(struct rcio_state *state)
     int result = 1;
     if (!gpio_supported) return true;
 
-    if (gpio.pin_states_updated > 0) {
-        gpio.pin_states_updated--;
+    if (update_required) {
+        update_dequeue;
         result = rcio_gpio_update(state);
     }
     return (result >= 0);
