@@ -11,8 +11,13 @@
 
 #define rcio_pwm_err(__dev, format, args...)\
         dev_err(__dev, "rcio_pwm: " format, ##args)
+#define rcio_pwm_err_ratelimited(__dev, format, args...)\
+        dev_err_ratelimited(__dev, "rcio_pwm: " format, ##args)
+
 #define rcio_pwm_warn(__dev, format, args...)\
         dev_warn(__dev, "rcio_pwm: " format, ##args)
+#define rcio_pwm_warn_ratelimited(__dev, format, args...)\
+        dev_warn_ratelimited(__dev, "rcio_pwm: " format, ##args)
 
 #define rcio_pwm_err(__dev, format, args...)\
         dev_err(__dev, "rcio_pwm: " format, ##args)
@@ -108,26 +113,29 @@ static void rcio_pwm_update_frequency(struct rcio_state *state, freq_update_stag
             printk(KERN_INFO "alt_frequency not set\n");
         }
         alt_frequency_updated = false;
-		return;
+        break;
 
     case SET_DEF:
         if (state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_DEFAULTRATE, default_frequency) < 0) {
             printk(KERN_INFO "default_frequency not set\n");
         }
         default_frequency_updated = false;
-        return;
+        break;
 
         //gcc and clang support this
     case SET_GRP1 ... SET_GRP4:
         state->register_set_byte(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_PWM_GROUP1_RATE + stage, new_frequencies[stage]);
         rcio_pwm_warn(pwm->chip.dev, "updated freq on grp %d to %d\n", stage, new_frequencies[stage]);
         frequencies[stage] = new_frequencies[stage];
-
-        return;
+        break;
 
     default:
-        return;
+        break;
     }
+}
+
+int rcio_pwm_force_update_pin(struct rcio_state *state, int pwm_pin_number) {
+    return state->register_set(state, PX4IO_PAGE_DIRECT_PWM, pwm_pin_number, values + pwm_pin_number, 1);
 }
 
 bool rcio_pwm_update(struct rcio_state *state)
@@ -308,9 +316,10 @@ static int rcio_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
     return 0;
 }
 
-static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
+static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
-    values[pwm->hwpwm] = 0;
+    values[pwm_dev->hwpwm] = 0;
+    rcio_pwm_force_update_pin(pwm->state, pwm_dev->hwpwm);
     armed = false;
 }
 
@@ -421,8 +430,8 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
     u16 new_frequency;
     int pwm_group_number = 0;
 
-    if (pwm_ignore_writings_mask && is_pwm_ignored(channel->hwpwm)) {
-        rcio_pwm_err(pwm->chip.dev, "pin %d is ignored", channel->hwpwm);
+    if (pwm_ignore_writings_mask && is_pwm_ignored(channel->hwpwm) && (duty_ns != 0)) {
+        rcio_pwm_err(pwm->chip.dev, "pin %d is ignored for writing %d", channel->hwpwm, duty_ns);
         return 0;
     }
 
@@ -463,7 +472,7 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
 				default_frequency_updated = true;
 			}
         }
-	
+
 		if (rcio_pwm_should_change_duty_old_way(chip, channel, new_frequency)) {
 			duty_ms = duty_ns / 1000;
 			values[channel->hwpwm] = duty_ms;       
@@ -587,6 +596,7 @@ int pwm_check_device_motors_running_count(struct rcio_state *state) {
     int read_result = (state->register_get(state, PX4IO_PAGE_DIRECT_PWM, 0, pwm_values, RCIO_PWM_MAX_CHANNELS));
 
     if (read_result < 0) {
+		rcio_pwm_warn(pwm->state->adapter->dev, "Error in pwm running count\n");
         return read_result;
     }
     //counting ones that are not zero
