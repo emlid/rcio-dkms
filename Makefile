@@ -16,3 +16,6 @@ install:
 
 clean:
 	$(MAKE) -C $(KERNEL_SOURCE) M=$(PWD) clean
+
+package:
+	@dkms mkdeb --source-only
