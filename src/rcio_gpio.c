@@ -76,6 +76,13 @@ static ssize_t reset_store(struct kobject *kobj, struct kobj_attribute *attr, co
     return count;
 }
 
+static void pwmignore_do_ignore_pin(uint16_t pin_number) {
+	pwm_ignore_writings_mask |= ((uint16_t)(1) << pin_number);
+}
+static void pwmignore_do_unignore_pin(uint16_t pin_number) {
+	pwm_ignore_writings_mask &= ~((uint16_t)(1) << pin_number);
+}
+
 static ssize_t pwmignore_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
     return sprintf(buf, "0x%x\nThis is the mask where each bit shows whether pwm writings to this channel will be ignored\n", pwm_ignore_writings_mask);
@@ -84,7 +91,7 @@ static ssize_t pwmignore_show(struct kobject *kobj, struct kobj_attribute *attr,
 #define inside_range(x, y, z) ((x >= y) && (x <= z))
 static ssize_t pwmignore_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
-    uint16_t  max_mask = (uint16_t)((1U << RCIO_PWM_MAX_CHANNELS) - 1U);
+    uint16_t max_mask = (uint16_t)((1U << RCIO_PWM_MAX_CHANNELS) - 1U);
     long ignore_mask = 0;
     int result = kstrtol(buf, 16, &ignore_mask);
 
@@ -134,8 +141,8 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
         return pwm_running;
     } else if (pwm_running > 0) {
         //some of motors are running now. we are not allowed to change pin configuration now.
-        rcio_gpio_err(gpio.rcio->adapter->dev, "Exporting error: you have some of PWM outputs running. Stop them to change pin configuration.\n");
-        return -EPERM;
+        rcio_gpio_warn(gpio.rcio->adapter->dev, "Exporting error: you have some of PWM outputs running. Stop them to change pin configuration.\n");
+        //return -EPERM;
     }
 
     read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1);
@@ -143,22 +150,29 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
 
     if (pwm_exported & (1 << offset)) {
         //this pin is already exported as pwm one
-        rcio_gpio_err(gpio.rcio->adapter->dev, "Exporting error: this pin [%d] is exported as PWM\n", offset);
-        return -EPERM;
-    } else {
-        //this pin is not exported as pwm, lets export it as gpio
-        read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
-        gpio_exported |= (1 << offset);
-        write_result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
+        rcio_gpio_warn(gpio.rcio->adapter->dev, "Exporting error: this pin [%d] is exported as PWM\n", offset);
+        
+        pwm_exported &= ~(1 << offset);
+        write_result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1);
+        
+        pwmignore_do_ignore_pin(offset);
 
         if (write_result < 0) return write_result;
+        //return -EPERM;
+    } //else {
+        //this pin is not exported as pwm, lets export it as gpio
+	read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
+	gpio_exported |= (1 << offset);
+	write_result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
 
-        PX4IO_GPIO_SET_PIN_GPIO_ENABLE(gpio.pin_states[offset]);
-        update_enqueue;
+	if (write_result < 0) return write_result;
 
-        rcio_gpio_warn(gpio.rcio->adapter->dev, "Exporting pin [%d] OK\n", (int)offset);
-        return 0;
-    }
+	PX4IO_GPIO_SET_PIN_GPIO_ENABLE(gpio.pin_states[offset]);
+	update_enqueue;
+
+	rcio_gpio_warn(gpio.rcio->adapter->dev, "Exporting pin [%d] OK\n", (int)offset);
+	return 0;
+    //}
 }
 
 static void gpio_chip_free(struct gpio_chip *chip, unsigned offset) {
@@ -184,6 +198,8 @@ static void gpio_chip_free(struct gpio_chip *chip, unsigned offset) {
     if (write_result <= 0) {
         rcio_gpio_err(gpio.rcio->adapter->dev, "Error on register_set %d\n", read_result);
     }
+    
+    pwmignore_do_unignore_pin(offset);
 }
 
 static void gpio_chip_set(struct gpio_chip *chip, unsigned offset, int value) {
@@ -198,6 +214,7 @@ static void gpio_chip_set(struct gpio_chip *chip, unsigned offset, int value) {
         PX4IO_GPIO_SET_PIN_STATE_HIGH(gpio.pin_states[offset]);
     }
     rcio_gpio_force_update(gpio.rcio);
+    if (offset != 13) rcio_gpio_warn(gpio.rcio->adapter->dev, "Setting pin [%d] to value %d\n", offset, value);
 }
 
 
@@ -209,14 +226,14 @@ static int gpio_get_direction(struct gpio_chip *chip, unsigned offset) {
 }
 static int gpio_direction_input(struct gpio_chip *chip, unsigned offset) {
     offset += GPIO_PIN_OFFSET;
-    rcio_gpio_warn(gpio.rcio->adapter->dev, "direction_input on %d\n", offset);
+    //rcio_gpio_warn(gpio.rcio->adapter->dev, "direction_input on %d\n", offset);
     PX4IO_GPIO_SET_PIN_DIRECTION_INPUT(gpio.pin_states[offset]);
     rcio_gpio_force_update(gpio.rcio);
     return 0;
 }
 static int gpio_direction_output(struct gpio_chip *chip, unsigned offset, int value) {
     offset += GPIO_PIN_OFFSET;
-    rcio_gpio_warn(gpio.rcio->adapter->dev, "direction_output on %d value %d\n", offset, value);
+    //rcio_gpio_warn(gpio.rcio->adapter->dev, "direction_output on %d value %d\n", offset, value);
     PX4IO_GPIO_SET_PIN_DIRECTION_OUTPUT(gpio.pin_states[offset]);
     rcio_gpio_force_update(gpio.rcio);
     return 0;

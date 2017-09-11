@@ -430,10 +430,10 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
     u16 new_frequency;
     int pwm_group_number = 0;
 
-    if (pwm_ignore_writings_mask && is_pwm_ignored(channel->hwpwm) && (duty_ns != 0)) {
+    /*if (pwm_ignore_writings_mask && is_pwm_ignored(channel->hwpwm) && (duty_ns != 0)) {
         rcio_pwm_err(pwm->chip.dev, "pin %d is ignored for writing %d", channel->hwpwm, duty_ns);
         return 0;
-    }
+    }*/
 
     armtimeout = jiffies + HZ / 10; /* timeout in 0.1s */
     new_frequency = 1000000000 / period_ns;
