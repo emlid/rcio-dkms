@@ -18,4 +18,6 @@ clean:
 	$(MAKE) -C $(KERNEL_SOURCE) M=$(PWD) clean
 
 package:
+	@rm -f *.deb
 	@dkms mkdeb --source-only
+	@mv -f ../rcio-dkms*.deb .
