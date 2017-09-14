@@ -79,11 +79,11 @@ static ssize_t reset_store(struct kobject *kobj, struct kobj_attribute *attr, co
     return count;
 }
 
-static void pwmignore_do_ignore_pin(uint16_t pin_number) {
-	pwm_ignore_writings_mask |= ((uint16_t)(1) << pin_number);
+static inline void pwmignore_do_ignore_pin(uint16_t pin_number) {
+	set_bit_m(pwm_ignore_writings_mask, pin_number);
 }
-static void pwmignore_do_unignore_pin(uint16_t pin_number) {
-	pwm_ignore_writings_mask &= ~((uint16_t)(1) << pin_number);
+static inline void pwmignore_do_unignore_pin(uint16_t pin_number) {
+	clear_bit_m(pwm_ignore_writings_mask, pin_number);
 }
 
 static ssize_t pwmignore_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
@@ -130,8 +130,38 @@ static int gpio_chip_get(struct gpio_chip *chip, unsigned offset) {
     return PX4IO_GPIO_GET_PIN_STATE(pin_state);
 }
 
+static inline int gpio_unexport_pwm_pin(uint16_t current_pwm_exported, uint16_t pin_number) {
+	current_pwm_exported &= ~(1 << pin_number);
+	return gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &current_pwm_exported, 1);
+}
+
+static inline int gpio_export_gpio_pin(uint16_t pin_number) {
+	int read_result, write_result;
+	uint16_t gpio_exported;
+	read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
+	if (read_result < 0) return read_result;
+	
+	set_bit_m(gpio_exported, pin_number);
+	
+	write_result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
+	if (write_result < 0) return write_result;
+	
+	return 0;
+}
+
+static inline int gpio_unexport_gpio_pin(uint16_t gpio_exported, uint16_t pin_number) {
+	int write_result;
+	
+    clear_bit_m(gpio_exported, pin_number);
+    
+    write_result = (gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
+    if (write_result < 0) return write_result;
+    
+	return 0;
+}
+
 static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
-    uint16_t pwm_exported, gpio_exported;
+    uint16_t pwm_exported;
     int read_result, write_result;
     int pwm_running = 0;
     offset += GPIO_PIN_OFFSET;
@@ -153,21 +183,17 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
         rcio_gpio_warn(gpio.rcio->adapter->dev, "Exporting warning: this pin [%d] is already exported as PWM\n", offset);
         
         //unexporting it as pwm on device
-        pwm_exported &= ~(1 << offset);
-        write_result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1);
+		write_result = gpio_unexport_pwm_pin(pwm_exported, offset);
         //and ignoring it in rcio_dkms
         pwmignore_do_ignore_pin(offset);
 
         if (write_result < 0) return write_result;
     } 
     
-	read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
-	gpio_exported |= (1 << offset);
-	write_result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
-
+	write_result = gpio_export_gpio_pin(offset);
 	if (write_result < 0) return write_result;
-
 	PX4IO_GPIO_SET_PIN_GPIO_ENABLE(gpio.pin_states[offset]);
+
 	update_enqueue;
 
 	rcio_gpio_warn(gpio.rcio->adapter->dev, "Exporting pin [%d] OK\n", (int)offset);
@@ -182,7 +208,7 @@ static void gpio_chip_free(struct gpio_chip *chip, unsigned offset) {
     rcio_gpio_warn(gpio.rcio->adapter->dev, "Unexporting pin [%d]\n", offset);
 
     read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
-    if (read_result <= 0) {
+    if (read_result < 0) {
         rcio_gpio_err(gpio.rcio->adapter->dev, "Error on register_get %d\n", read_result);
         return;
     }
@@ -191,10 +217,8 @@ static void gpio_chip_free(struct gpio_chip *chip, unsigned offset) {
     gpio.pin_states[offset] = 0;
     rcio_gpio_force_update(gpio.rcio);
 
-    gpio_exported &= ~(1 << offset);
-    write_result = (gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1));
-
-    if (write_result <= 0) {
+	write_result = gpio_unexport_gpio_pin(gpio_exported, offset);
+    if (write_result < 0) {
         rcio_gpio_err(gpio.rcio->adapter->dev, "Error on register_set %d\n", read_result);
     }
     
