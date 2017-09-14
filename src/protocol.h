@@ -307,20 +307,41 @@ enum {							/* DSM bind states */
 #define PX4IO_PAGE_GPIO_EXPORTED     16
 
 /* GPIO useful stuff */
-#define PX4IO_GPIO_SET_PIN_GPIO_ENABLE(x)  (x |= 1 << 15)
-#define PX4IO_GPIO_SET_PIN_GPIO_DISABLE(x) (x &= ~(1 << 15))
 
-#define PX4IO_GPIO_GET_PIN_GPIO_ENABLED(x) ((x >> 15) & 1)
+/* Each uint16_t in r_page_gpio represents a single pin on Navio2 rail,
+ * where a certain bit in its value represents some parameter:
+ * 15 14  13 .... 2 1 0
+ * EN DIR N  .... N N V
+ * 
+ * EN  - is pin GPIO-enabled: 1 for Yes, 0 for No
+ * DIR - direction: 0 for Output, 1 for Input
+ * V   - current pin value: 1 for High, 0 for Low
+ * N   - bit value has no meaning now. 
+ * 
+ * This structure will allow further improvements in the future
+ * (such as pullup/pulldown configs etc.)
+ * 
+ * Therefore, if r_page_gpio[i] is 0, 15th bit of r_page_gpio[i] is also 0,
+ * and pin is not used as GPIO at all. */
+ 
+#define set_bit_m(p, n) ((p) |= (1 << (n)))
+#define clear_bit_m(p, n) ((p) &= (~(1) << (n)))
+#define get_bit_m(p, n) ((p >> n) & 1) 
 
-#define PX4IO_GPIO_SET_PIN_STATE_HIGH(x)   (x |= 1 << 0)
-#define PX4IO_GPIO_SET_PIN_STATE_LOW(x)    (x &= ~(1 << 0))
+#define PX4IO_GPIO_SET_PIN_GPIO_ENABLE(x)  set_bit_m(x, 15) 
+#define PX4IO_GPIO_SET_PIN_GPIO_DISABLE(x) clear_bit_m(x, 15) 
 
-#define PX4IO_GPIO_GET_PIN_STATE(x)        ((x >> 0) & 1)
+#define PX4IO_GPIO_GET_PIN_GPIO_ENABLED(x) get_bit_m(x, 15) 
 
-#define PX4IO_GPIO_SET_PIN_DIRECTION_INPUT(x)   (x |= 1 << 14)
-#define PX4IO_GPIO_SET_PIN_DIRECTION_OUTPUT(x)    (x &= ~(1 << 14))
+#define PX4IO_GPIO_SET_PIN_STATE_HIGH(x)   set_bit_m(x, 0) 
+#define PX4IO_GPIO_SET_PIN_STATE_LOW(x)    clear_bit_m(x, 0) 
 
-#define PX4IO_GPIO_GET_PIN_DIRECTION(x)        ((x >> 14) & 1)
+#define PX4IO_GPIO_GET_PIN_STATE(x)        get_bit_m(x, 0) 
+
+#define PX4IO_GPIO_SET_PIN_DIRECTION_INPUT(x)   set_bit_m(x, 14) 
+#define PX4IO_GPIO_SET_PIN_DIRECTION_OUTPUT(x)  clear_bit_m(x, 14)  
+
+#define PX4IO_GPIO_GET_PIN_DIRECTION(x)        get_bit_m(x, 14) 
 
 #define PX4IO_GPIO_PIN_DIRECTION_OUTPUT         0
 #define PX4IO_GPIO_PIN_DIRECTION_INPUT          1
