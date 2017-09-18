@@ -346,6 +346,8 @@ enum {							/* DSM bind states */
 #define PX4IO_GPIO_PIN_DIRECTION_OUTPUT         0
 #define PX4IO_GPIO_PIN_DIRECTION_INPUT          1
 
+/* Git Hash page */
+#define	PX4IO_PAGE_GIT_HASH		22
 
 /**
  * As-needed mixer data upload.

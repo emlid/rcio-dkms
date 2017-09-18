@@ -17,6 +17,7 @@ static void handle_status(uint16_t status);
 static void handle_alarms(uint16_t alarms);
 static bool rcio_status_request_crc(struct rcio_state *state);
 static bool rcio_status_request_board_type(struct rcio_state *state);
+static bool rcio_status_request_git_hash(struct rcio_state *state);
 
 char *board_names[] =
 {
@@ -33,6 +34,8 @@ static struct rcio_status {
     bool init_ok;
     bool pwm_ok;
     bool alive;
+    board_type_t board_type;
+    char git_hash[20];
     struct rcio_state *rcio;
 } status;
 
@@ -138,6 +141,12 @@ bool rcio_status_probe(struct rcio_state *state)
     } else {
         rcio_status_warn(state->adapter->dev, "Board type: 0x%x (%s)\n", (int)status.rcio->board_type, board_names[status.rcio->board_type]);
     }
+    
+	if (!rcio_status_request_git_hash(state)) {
+        rcio_status_err(state->adapter->dev, "Could not read git hash\n");
+    } else {
+        rcio_status_warn(state->adapter->dev, "Git hash: %s", status.git_hash);
+    }
 
     return true;
 }
@@ -161,6 +170,13 @@ static bool rcio_status_request_board_type(struct rcio_state *state) {
     }
     
     state->board_type = reg;
+    return true;
+}
+
+static bool rcio_status_request_git_hash(struct rcio_state *state) {
+    if (state->register_get(state, PX4IO_PAGE_GIT_HASH, 0, (uint16_t*)(status.git_hash), 5) < 0) {
+        return false;
+    }
     return true;
 }
 
