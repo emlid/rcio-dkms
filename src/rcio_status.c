@@ -18,16 +18,6 @@ static void handle_alarms(uint16_t alarms);
 static bool rcio_status_request_crc(struct rcio_state *state);
 static bool rcio_status_request_board_type(struct rcio_state *state);
 
-typedef enum
-{
-	NAVIO2 = 0x0,
-	EDGE = 0x01,
-	NEW_BOARD1  = 0x02,
-	NEW_BOARD2 = 0x03,
-	UNKNOWN_BOARD = 0x04
-
-} board_type_t;
-
 char *board_names[] =
 {
 	[NAVIO2] = "navio2",
@@ -43,7 +33,6 @@ static struct rcio_status {
     bool init_ok;
     bool pwm_ok;
     bool alive;
-    board_type_t board_type;
     struct rcio_state *rcio;
 } status;
 
@@ -71,7 +60,7 @@ static ssize_t crc_show(struct kobject *kobj, struct kobj_attribute *attr, char 
 
 static ssize_t board_name_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-    return sprintf(buf, "%s\n", board_names[status.board_type]);
+    return sprintf(buf, "%s\n", board_names[status.rcio->board_type]);
 }
 
 static struct kobj_attribute init_ok_attribute = __ATTR(init_ok, S_IRUGO, init_ok_show, NULL);
@@ -144,7 +133,7 @@ bool rcio_status_probe(struct rcio_state *state)
 	if (!rcio_status_request_board_type(state)) {
         rcio_status_err(state->adapter->dev, "Could not read board type\n");
     } else {
-        rcio_status_warn(state->adapter->dev, "Board type: 0x%x (%s)\n", (int)status.board_type, board_names[status.board_type]);
+        rcio_status_warn(state->adapter->dev, "Board type: 0x%x (%s)\n", (int)status.rcio->board_type, board_names[status.rcio->board_type]);
     }
 
     return true;
@@ -168,7 +157,7 @@ static bool rcio_status_request_board_type(struct rcio_state *state) {
         return false;
     }
     
-    status.board_type = reg;
+    state->board_type = reg;
     return true;
 }
 

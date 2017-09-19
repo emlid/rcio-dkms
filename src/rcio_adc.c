@@ -4,11 +4,11 @@
 #include "rcio.h"
 #include "protocol.h"
 
-#define RCIO_ADC_CHANNELS_COUNT 6
+#define RCIO_ADC_MAX_CHANNELS_COUNT 8
 
 static struct rcio_state *rcio;
 
-static u16 measurements[RCIO_ADC_CHANNELS_COUNT];
+static u16 measurements[RCIO_ADC_MAX_CHANNELS_COUNT];
 
 bool rcio_adc_update(struct rcio_state *state);
 
@@ -29,7 +29,12 @@ static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr,
         channel = measurements[4];
     } else if (!strcmp(attr->attr.name, "ch5")) {
         channel = measurements[5];
+    } else if (!strcmp(attr->attr.name, "ch6")) {
+        channel = measurements[6];
+    } else if (!strcmp(attr->attr.name, "ch7")) {
+        channel = measurements[7];
     }
+    
 
     if (channel < 0) {
         return -EBUSY;
@@ -44,6 +49,8 @@ static struct kobj_attribute ch2_attribute = __ATTR(ch2, S_IRUGO, channel_show, 
 static struct kobj_attribute ch3_attribute = __ATTR(ch3, S_IRUGO, channel_show, NULL);
 static struct kobj_attribute ch4_attribute = __ATTR(ch4, S_IRUGO, channel_show, NULL);
 static struct kobj_attribute ch5_attribute = __ATTR(ch5, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch6_attribute = __ATTR(ch6, S_IRUGO, channel_show, NULL);
+static struct kobj_attribute ch7_attribute = __ATTR(ch7, S_IRUGO, channel_show, NULL);
 
 static struct attribute *attrs[] = {
     &ch0_attribute.attr,
@@ -52,6 +59,8 @@ static struct attribute *attrs[] = {
     &ch3_attribute.attr,
     &ch4_attribute.attr,
     &ch5_attribute.attr,
+    &ch6_attribute.attr,
+    &ch7_attribute.attr,
     NULL,
 };
 
@@ -68,7 +77,7 @@ bool rcio_adc_update(struct rcio_state *state)
         return false;
     }
 
-    if (state->register_get(state, PX4IO_PAGE_RAW_ADC_INPUT, 0, measurements, RCIO_ADC_CHANNELS_COUNT) < 0) {
+    if (state->register_get(state, PX4IO_PAGE_RAW_ADC_INPUT, 0, measurements, RCIO_ADC_MAX_CHANNELS_COUNT) < 0) {
         return false;
     }
 
@@ -84,6 +93,9 @@ int rcio_adc_probe(struct rcio_state *state)
     rcio = state;
 
     timeout = jiffies + HZ / 50; /* timeout in 0.02s */
+    
+    //switching off channels we dont use
+    attrs[state->adc_channels_count] = NULL;
 
     ret = sysfs_create_group(rcio->object, &attr_group);
 

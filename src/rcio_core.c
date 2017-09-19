@@ -107,6 +107,18 @@ static int rcio_init(struct rcio_adapter *adapter)
     rcio_state.register_modify = register_modify;
     mutex_init(&rcio_state.adapter->lock);
 
+	
+    if (rcio_status_probe(&rcio_state) < 0) {
+        goto errout_status;
+    }
+
+    if (rcio_state.board_type == EDGE) {
+        rcio_state.adc_channels_count = EDGE_ADC_CHANNELS_COUNT;
+        rcio_state.pwm_channels_count = EDGE_PWM_CHANNELS_COUNT;
+    } else if (rcio_state.board_type == NAVIO2) {
+        rcio_state.adc_channels_count = NAVIO2_ADC_CHANNELS_COUNT;
+        rcio_state.pwm_channels_count = NAVIO2_PWM_CHANNELS_COUNT;
+    }
 
     if (rcio_adc_probe(&rcio_state) < 0) {
         goto errout_adc;
@@ -118,10 +130,6 @@ static int rcio_init(struct rcio_adapter *adapter)
 
     if (rcio_rcin_probe(&rcio_state) < 0) {
         goto errout_rcin;
-    }
-
-    if (rcio_status_probe(&rcio_state) < 0) {
-        goto errout_status;
     }
 
     task = kthread_run(&worker, (void *)&rcio_state,"rcio_worker");

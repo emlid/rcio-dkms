@@ -283,7 +283,7 @@ static int rcio_pwm_create_sysfs_handle(struct rcio_state *state)
         return -ENOMEM;
 
     pwm->chip.ops = &rcio_pwm_ops;
-    pwm->chip.npwm = RCIO_PWM_MAX_CHANNELS;
+    pwm->chip.npwm = state->pwm_channels_count;
     pwm->chip.can_sleep = false;
     pwm->chip.dev = state->adapter->dev;
 
