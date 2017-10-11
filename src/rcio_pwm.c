@@ -305,8 +305,9 @@ static void rcio_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 static void print_freqs_error(void) {
 	if (print_freqs_countdown < 0) return;
 	print_freqs_countdown--;
-	printk_ratelimited(KERN_ERR "Please note that only frequency changes on pins 0, 4, 8 and 12 count. \
-This error could occur if you put a servo and a motor on the same pwm group. \
+	printk_ratelimited(KERN_ERR "Please note that PWM frequency on pins 0, 4, 8 and 12 has more priority. \
+This error could occur if you put a servo and a motor on the same pwm group \
+(like servo on 7th/8th channel while using a copter with 6 motors like hexa/y6)\
 For additional information please refer to the documentation.");
 }
 
@@ -339,7 +340,8 @@ static bool rcio_pwm_should_change_freq_new_way(struct pwm_chip *chip, struct pw
 
     //we depend on motors running here
     if (motors_are_stopped) {
-        printk_ratelimited(KERN_WARNING "Only frequency changes on pins 0, 4, 8 and 12 count. However, we will change the frequency by now, since the motors are stopped.");
+		/* intentionally leaving commented printk here
+        printk_ratelimited(KERN_WARNING "Only frequency changes on pins 0, 4, 8 and 12 count. However, we will change the frequency by now, since the motors are stopped.");*/
         return true;
     } else {
         print_freqs_error();
