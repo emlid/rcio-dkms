@@ -34,18 +34,9 @@ static struct rcio_status {
     bool pwm_ok;
     bool alive;
     struct rcio_state *rcio;
-    bool heartbeat_enabled;
-    uint16_t heartbeat;
 } status;
 
 bool rcio_status_update(struct rcio_state *state);
-
-static int rcio_status_do_heartbeat(struct rcio_state *state) {
-    int result = state->register_set(state, PX4IO_PAGE_RCIO_HEARTBEAT, 0, &status.heartbeat, 1);
-    status.heartbeat++;
-    if (status.heartbeat > 0xFF) status.heartbeat = 0;
-    return result;
-}
 
 static ssize_t init_ok_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -67,41 +58,17 @@ static ssize_t crc_show(struct kobject *kobj, struct kobj_attribute *attr, char 
     return sprintf(buf, "0x%lx\n", status.crc);
 }
 
-
 static ssize_t board_name_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
     return sprintf(buf, "%s\n", board_names[status.rcio->board_type]);
 }
 
-static ssize_t heartbeat_enabled_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-    return sprintf(buf, "%d", status.heartbeat_enabled);
-}
-
-static ssize_t heartbeat_enabled_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
-{
-
-    long value = 0;
-    int result = kstrtol(buf, 10, &value);
-    bool heartbeat_enabled;
-
-    if (result == 0) {
-        heartbeat_enabled = (value != 0);
-        rcio_status_warn(status.rcio->adapter->dev, "Heartbeat_enabled is set to %d\n", heartbeat_enabled);
-        status.heartbeat_enabled = heartbeat_enabled;
-    } else {
-        rcio_status_err(status.rcio->adapter->dev, "Invalid value for heartbeat_enable");
-        return -EINVAL;
-    }
-    return count;
-}
 
 static struct kobj_attribute init_ok_attribute = __ATTR(init_ok, S_IRUGO, init_ok_show, NULL);
 static struct kobj_attribute pwm_ok_attribute = __ATTR(pwm_ok, S_IRUGO, pwm_ok_show, NULL);
 static struct kobj_attribute alive_attribute = __ATTR(alive, S_IRUGO, alive_show, NULL);
 static struct kobj_attribute crc_attribute = __ATTR(crc, S_IRUGO, crc_show, NULL);
 static struct kobj_attribute board_name_attribute = __ATTR(board_name, S_IRUGO, board_name_show, NULL);
-static struct kobj_attribute heartbeat_enabled_attribute = __ATTR_RW(heartbeat_enabled);
 
 static struct attribute *attrs[] = {
     &init_ok_attribute.attr,
@@ -109,7 +76,6 @@ static struct attribute *attrs[] = {
     &alive_attribute.attr,
     &crc_attribute.attr, 
     &board_name_attribute.attr,
-    &heartbeat_enabled_attribute.attr,
     NULL,
 };
 
@@ -135,11 +101,6 @@ bool rcio_status_update(struct rcio_state *state)
         rcio_status_err(state->adapter->dev, "Could not update CRC\n");
     } 
 
-    if (status.heartbeat_enabled) {
-        if (!rcio_status_do_heartbeat(state)) {
-            rcio_status_err(state->adapter->dev, "Could not do heartbeat\n");
-        }
-    }
     status.alive = true;
 
     handle_status(regs[0]);
@@ -161,6 +122,7 @@ bool rcio_status_probe(struct rcio_state *state)
 
     if (ret < 0) {
         rcio_status_err(state->adapter->dev, "module not registered int sysfs\n");
+        return false;
     }
 
     status.init_ok = false;
@@ -176,9 +138,6 @@ bool rcio_status_probe(struct rcio_state *state)
     } else {
         rcio_status_warn(state->adapter->dev, "Board type: 0x%x (%s)\n", (int)status.rcio->board_type, board_names[status.rcio->board_type]);
     }
-
-    status.heartbeat = 0;
-    status.heartbeat_enabled = true;
 
     return true;
 }

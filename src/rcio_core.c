@@ -12,6 +12,7 @@
 #include "rcio_pwm.h"
 #include "rcio_rcin.h"
 #include "rcio_status.h"
+#include "rcio_safety.h"
 
 static int register_set(struct rcio_state *state, u8 page, u8 offset, const u16 *values, u8 num_values)
 {
@@ -78,6 +79,7 @@ int worker(void *data)
         adc_updated = rcio_adc_update(state);
         rcin_updated = rcio_rcin_update(state);
         rcio_status_update(state);
+		rcio_safety_update(state);
 
         if (pwm_updated || adc_updated || rcin_updated) {
             fail_counter = 0;
@@ -107,11 +109,6 @@ static int rcio_init(struct rcio_adapter *adapter)
     rcio_state.register_modify = register_modify;
     mutex_init(&rcio_state.adapter->lock);
 
-	
-    if (rcio_status_probe(&rcio_state) < 0) {
-        goto errout_status;
-    }
-
     if (rcio_state.board_type == EDGE) {
         rcio_state.adc_channels_count = EDGE_ADC_CHANNELS_COUNT;
         rcio_state.pwm_channels_count = EDGE_PWM_CHANNELS_COUNT;
@@ -132,11 +129,20 @@ static int rcio_init(struct rcio_adapter *adapter)
         goto errout_rcin;
     }
 
+    if (rcio_status_probe(&rcio_state) < 0) {
+        goto errout_status;
+    }
+
+    if (rcio_safety_probe(&rcio_state) < 0) {
+        goto errout_safety;
+    }
+
     task = kthread_run(&worker, (void *)&rcio_state,"rcio_worker");
 
     return 0;
 
 errout_status:
+errout_safety:
 errout_rcin:
     rcio_pwm_remove(&rcio_state);
 errout_pwm:
