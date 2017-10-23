@@ -82,7 +82,6 @@ bool rcio_adc_update(struct rcio_state *state)
     }
 
     timeout = jiffies + HZ / 50; /* timeout in 0.02s */
-
     return true;
 }
 

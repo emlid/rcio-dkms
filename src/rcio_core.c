@@ -79,7 +79,7 @@ int worker(void *data)
         adc_updated = rcio_adc_update(state);
         rcin_updated = rcio_rcin_update(state);
         rcio_status_update(state);
-		rcio_safety_update(state);
+        rcio_safety_update(state);
 
         if (pwm_updated || adc_updated || rcin_updated) {
             fail_counter = 0;

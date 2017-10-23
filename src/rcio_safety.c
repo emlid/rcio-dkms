@@ -37,10 +37,9 @@ static ssize_t heartbeat_enabled_store(struct kobject *kobj, struct kobj_attribu
 
     long value = 0;
     int result = kstrtol(buf, 10, &value);
-    bool heartbeat_enabled;
 
     if (result == 0) {
-        heartbeat_enabled = (value != 0);
+        bool heartbeat_enabled = (value != 0);
         rcio_safety_warn(safety.rcio->adapter->dev, "Heartbeat_enabled is set to %d\n", heartbeat_enabled);
         safety.heartbeat_enabled = heartbeat_enabled;
     } else {
@@ -74,7 +73,7 @@ bool rcio_safety_update(struct rcio_state *state)
         }
     }
 
-    safety.timeout = jiffies + HZ / 5; /* timeout in 0.2s */
+    safety.timeout = jiffies + msecs_to_jiffies(200); /* timeout in 0.2s */
     return true;
 }
 
@@ -84,7 +83,7 @@ bool rcio_safety_probe(struct rcio_state *state)
 
     safety.rcio = state;
 
-    safety.timeout = jiffies + HZ / 50; /* timeout in 0.02s */
+    safety.timeout = jiffies + msecs_to_jiffies(20); /* timeout in 0.02s */
 
     ret = sysfs_create_group(safety.rcio->object, &attr_group);
 
