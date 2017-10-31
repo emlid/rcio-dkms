@@ -30,8 +30,6 @@ extern bool gpio_supported;
 
 extern uint16_t pwm_ignore_writings_mask;
 
-bool adv_timer_config_supported;
-
 struct pwm_output_rc_config {
     uint8_t channel;
     uint16_t rc_min;
