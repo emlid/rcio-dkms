@@ -109,6 +109,10 @@ static int rcio_init(struct rcio_adapter *adapter)
     rcio_state.register_modify = register_modify;
     mutex_init(&rcio_state.adapter->lock);
 
+    if (!rcio_status_probe(&rcio_state)) {
+        goto errout_status;
+    }
+
     if (rcio_state.board_type == EDGE) {
         rcio_state.adc_channels_count = EDGE_ADC_CHANNELS_COUNT;
         rcio_state.pwm_channels_count = EDGE_PWM_CHANNELS_COUNT;
@@ -129,11 +133,7 @@ static int rcio_init(struct rcio_adapter *adapter)
         goto errout_rcin;
     }
 
-    if (rcio_status_probe(&rcio_state) < 0) {
-        goto errout_status;
-    }
-
-    if (rcio_safety_probe(&rcio_state) < 0) {
+    if (!rcio_safety_probe(&rcio_state)) {
         goto errout_safety;
     }
 
