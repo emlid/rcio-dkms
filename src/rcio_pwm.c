@@ -92,6 +92,7 @@ static unsigned long armtimeout;
 
 
 static int print_freqs_countdown = 3;
+static int force_pwmzero_countdown = 0;
 
 typedef enum {
     SET_GRP1 = 0, SET_GRP2, SET_GRP3, SET_GRP4, SET_ALT, SET_DEF, CLEAR
@@ -134,6 +135,18 @@ static void rcio_pwm_update_frequency(struct rcio_state *state, freq_update_stag
 
 int rcio_pwm_force_update_pin(struct rcio_state *state, int pwm_pin_number) {
     return state->register_set(state, PX4IO_PAGE_DIRECT_PWM, pwm_pin_number, values + pwm_pin_number, 1);
+}
+
+static int rcio_set_zero_values(struct rcio_state *state) {
+	for (int i = 0; i < RCIO_PWM_MAX_ZEROED_CHANNELS; i++) values[i] = 0;
+	return true;
+}
+
+int rcio_pwm_force_zero_duty(struct rcio_state *state) {
+	rcio_pwm_warn(state->adapter->dev, "Forcing all PWM channels to zero...");
+	force_pwmzero_countdown += RCIO_PWM_ZERO_SKIP_UPDATE_CYCLES;
+	rcio_pwm_update(state);
+	return 0;
 }
 
 bool rcio_pwm_update(struct rcio_state *state)
@@ -188,6 +201,14 @@ bool rcio_pwm_update(struct rcio_state *state)
     }
 
     freq_update_noticed = false;
+    
+	if (force_pwmzero_countdown > 0) {
+		force_pwmzero_countdown--;
+		rcio_set_zero_values(state);
+	} else if (force_pwmzero_countdown < 0) {
+		force_pwmzero_countdown = 0;
+	}
+    
     if (armed && (!some_freq_updated )) {
         return state->register_set(state, PX4IO_PAGE_DIRECT_PWM, 0, values, RCIO_PWM_MAX_CHANNELS);
     }
@@ -428,7 +449,8 @@ static int rcio_pwm_config(struct pwm_chip *chip, struct pwm_device *channel, in
     u16 new_frequency;
     int pwm_group_number = 0;
 
-    if (pwm_ignore_writings_mask && is_pwm_ignored(channel->hwpwm) && (duty_ns != 0)) {
+    if ((pwm_ignore_writings_mask && is_pwm_ignored(channel->hwpwm) && (duty_ns != 0)) ||
+		((force_pwmzero_countdown > 0) && (channel->hwpwm < RCIO_PWM_MAX_ZEROED_CHANNELS))) {
         //rcio_pwm_err(pwm->chip.dev, "pin %d is ignored for writing %d", channel->hwpwm, duty_ns);
         values[channel->hwpwm] = 0;
         return 0;

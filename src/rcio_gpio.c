@@ -173,6 +173,7 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
     } else if (pwm_running > 0) {
         //some of motors are running now. we are not allowed to change pin configuration now.
         rcio_gpio_warn(gpio.rcio->adapter->dev, "Exporting warning: you have some of PWM outputs running.\n");
+        rcio_pwm_force_zero_duty(gpio.rcio);
     }
 
     read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_PWM_EXPORTED, 0, &pwm_exported, 1);
@@ -203,8 +204,19 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
 
 static void gpio_chip_free(struct gpio_chip *chip, unsigned offset) {
     uint16_t gpio_exported;
-    int read_result, write_result;
+    int read_result, write_result, pwm_running;
     offset += GPIO_PIN_OFFSET;
+    
+    pwm_running = pwm_check_device_motors_running_count(gpio.rcio);
+
+    if (pwm_running < 0) {
+        return;
+    } else if (pwm_running > 0) {
+        //some of motors are running now. we are not allowed to change pin configuration now.
+        rcio_gpio_warn(gpio.rcio->adapter->dev, "Unexporting warning: you have some of PWM outputs running.\n");
+        rcio_pwm_force_zero_duty(gpio.rcio);
+    }
+    
     rcio_gpio_warn(gpio.rcio->adapter->dev, "Unexporting pin [%d]\n", offset);
 
     read_result = gpio.rcio->register_get(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
