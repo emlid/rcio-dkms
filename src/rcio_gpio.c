@@ -195,7 +195,7 @@ static int gpio_chip_request(struct gpio_chip *chip, unsigned offset) {
 	if (write_result < 0) return write_result;
 	PX4IO_GPIO_SET_PIN_GPIO_ENABLE(gpio.pin_states[offset]);
 
-	update_enqueue;
+	rcio_gpio_force_update(gpio.rcio);
 
 	rcio_gpio_warn(gpio.rcio->adapter->dev, "Exporting pin [%d] OK\n", (int)offset);
 	return 0;
@@ -225,9 +225,12 @@ static void gpio_chip_free(struct gpio_chip *chip, unsigned offset) {
         return;
     }
 
-    //setting the pin value to zero - gpio value is 0, not exported to everything
-    gpio.pin_states[offset] = 0;
+    //forcing the pin value to zero, then set gpio value to 0 (not exported to everything)
+    PX4IO_GPIO_SET_PIN_STATE_LOW(gpio.pin_states[offset]);
     rcio_gpio_force_update(gpio.rcio);
+    gpio.pin_states[offset] = (uint16_t)((uint32_t)gpio.pin_states[offset] & (~(1UL) << (15)));
+    rcio_gpio_force_update(gpio.rcio);
+    gpio.pin_states[offset] = 0;
 
 	write_result = gpio_unexport_gpio_pin(gpio_exported, offset);
     if (write_result < 0) {
@@ -246,7 +249,7 @@ static void gpio_chip_set(struct gpio_chip *chip, unsigned offset, int value) {
     } else {
         PX4IO_GPIO_SET_PIN_STATE_HIGH(gpio.pin_states[offset]);
     }
-    rcio_gpio_force_update(gpio.rcio);
+    update_enqueue;
 }
 
 
@@ -298,7 +301,7 @@ bool rcio_gpio_update(struct rcio_state *state)
 
     if (update_required) {
         update_dequeue;
-        result = rcio_gpio_update(state);
+        result = rcio_gpio_force_update(state);
     }
     return (result >= 0);
 }
