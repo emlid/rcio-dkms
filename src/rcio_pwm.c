@@ -2,6 +2,7 @@
 #include <linux/pwm.h>
 #include <linux/device.h>
 #include <linux/slab.h>
+#include <linux/version.h>
 
 #include "rcio.h"
 #include "protocol.h"
@@ -321,7 +322,9 @@ static int rcio_pwm_create_sysfs_handle(struct rcio_state *state)
 
     pwm->chip.ops = &rcio_pwm_ops;
     pwm->chip.npwm = state->pwm_channels_count;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,10,0))
     pwm->chip.can_sleep = false;
+#endif
     pwm->chip.dev = state->adapter->dev;
     pwm->state = state;
 
