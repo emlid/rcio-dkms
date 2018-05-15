@@ -314,8 +314,10 @@ bool rcio_gpio_update(struct rcio_state *state)
 
 int rcio_gpio_probe(struct rcio_state *state)
 {
+    int write_result;
     int ret = 0;
     uint16_t setup_features;
+    uint16_t gpio_exported = 0;
 
     ret = (state->register_get(state, PX4IO_PAGE_SETUP, PX4IO_P_SETUP_FEATURES, &setup_features, 1));
     if (!(setup_features & PX4IO_P_SETUP_FEATURES_GPIO)) {
@@ -347,6 +349,12 @@ int rcio_gpio_probe(struct rcio_state *state)
     }
 
     memset(gpio.pin_states, 0, sizeof(gpio.pin_states));
+    rcio_gpio_force_update(gpio.rcio);
+    write_result = gpio.rcio->register_set(gpio.rcio, PX4IO_PAGE_GPIO_EXPORTED, 0, &gpio_exported, 1);
+    if (write_result < 0) {
+        rcio_gpio_err(state->adapter->dev, "error during unexporting GPIO\n");
+        return false;
+    }
     gpio.pin_states_updated = 1;
 
     return true;
