@@ -12,7 +12,7 @@ Requirements
 Building
 
     # Get source
-    pi@navio:~ $ git clone git@github.com:emlid/rcio-dkms-private.git
+    pi@navio:~ $ git clone git@github.com:emlid/rcio-dkms.git
     pi@navio:~/rcio-dkms-private $ make
 
 Updating dkms
